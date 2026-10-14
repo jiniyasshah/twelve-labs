@@ -43,3 +43,9 @@ If you ran the earlier `--extras indic` command and saw Transformers/Hugging Fac
 ### Windows native TorchAudio errors
 
 If the Indic worker reports `Could not load this library: ...libtorchaudio.pyd`, check both environments with `python studio.py --diagnose`. The setup command now validates the actual Parler/TorchAudio imports, and when appropriate attempts to reinstall only a TorchAudio wheel matching the isolated Indic PyTorch build. Manual repair: `python studio.py --setup --repair-indic-audio`. If it still fails, ensure the Microsoft Visual C++ Redistributable x64 is installed; the error can also indicate a missing native DLL. CUDA detection for Indic is independent of the main Studio environment.
+
+## Automated verification
+
+Every pull request and push to main runs Python API, editor, installer, and JavaScript regression tests with Python 3.12 on **Windows, Linux, and macOS**. A separate Windows job installs the actual PyTorch 2.11.0 / TorchAudio 2.11.0 CPU wheel pair, imports the native TorchAudio DLL, installs the open-source Parler Python package, and imports its model class. Tests do not download gated speech model weights or perform full audio inference.
+
+If your older `.venv-indic` has PyTorch 2.14.1, no published TorchAudio 2.14.1 wheel is available from the index shown in your install log. The new installer will replace both incompatible wheels with the supported 2.11.0 pair **inside .venv-indic only**, leaving KittenTTS and existing recordings untouched. Use `python studio.py --setup --repair-indic-audio` (CPU) or `python studio.py --setup --repair-indic-audio --gpu` (NVIDIA CUDA 12.8). This correction requires a one-time PyTorch download when versions do not match.
