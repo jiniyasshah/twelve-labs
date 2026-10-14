@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
+from model_backends import KokoroEngine, IndicParlerEngine, KOKORO_VOICES, INDIC_VOICES
 
 import numpy as np
 import soundfile as sf
@@ -53,6 +54,8 @@ for folder in (OUTPUTS, REFS, CHUNKS, PREVIEWS):
 DB = DATA / "studio.sqlite3"
 
 MODELS = {
+    "hexgrad/Kokoro-82M": {"label": "Kokoro 82M · English / Hindi", "family": "kokoro", "size": "82M · fast English/Hindi · optional install · Apache 2.0"},
+    "ai4bharat/indic-parler-tts": {"label": "Indic Parler · Hindi / Nepali", "family": "indic", "size": "Hindi & Nepali · voice descriptions · HF gated access · Apache 2.0"},
     "KittenML/kitten-tts-2": {"label": "KittenTTS 2", "family": "v2", "size": "1.7B · 47 voices · cloning + expression"},
     "KittenML/kitten-tts-mini-0.8": {"label": "Mini", "family": "onnx", "size": "80M · CPU-friendly"},
     "KittenML/kitten-tts-micro-0.8": {"label": "Micro", "family": "onnx", "size": "40M · CPU-friendly"},
@@ -60,7 +63,8 @@ MODELS = {
     "KittenML/kitten-tts-nano-0.8-int8": {"label": "Nano INT8", "family": "onnx", "size": "15M · smallest download"},
 }
 
-VOICE_PROFILES = {
+VOICE_PROFILES = {**{v: ("Kokoro natural voice", lang) for v, lang in KOKORO_VOICES.items()},
+    **{v: ("Indic Parler speaker", lang) for v, lang in INDIC_VOICES.items()},
     "Bella": ("Bright and friendly", "English"), "Jasper": ("Easygoing and warm", "English"),
     "Luna": ("Soft and clear", "English"), "Bruno": ("Confident narrator", "English"),
     "Rosie": ("Cheerful and light", "English"), "Hugo": ("Steady and natural", "English"),
@@ -121,7 +125,7 @@ META_KEYS = {'model', 'device', 'weights', 'decoder', 'voice', 'preset',
              'normalize', 'streaming', 'speed', 'max_new_tokens',
              'use_reference_prompt', 'temperature', 'top_k', 'top_p', 'min_p',
              'advanced', 'reference_id', 'reference_text', 'loop_protection',
-             'segments', 'segment_gap'}
+             'segments', 'segment_gap', 'description'}
 
 
 def recording_meta(rid: str) -> dict:
@@ -189,6 +193,13 @@ def model_choice(payload: dict):
 
 
 def generation_options(payload: dict, family: str):
+    if family == "kokoro":
+        return {}
+    if family == "indic":
+        description = str(payload.get("description") or "").strip()
+        if len(description) > 500:
+            raise ValueError("Voice description must be 500 characters or fewer")
+        return {"description": description} if description else {}
     if family == "onnx":
         return {"speed": ranged(payload.get("speed", 1.0), 0.5, 2.0, "Speech speed")}
     preset = payload.get("preset", "stable")
@@ -403,16 +414,16 @@ def validate_references(payload: dict) -> None:
 def resolve_device(family, requested, capabilities=None):
     """Return a usable device and a plain-language reason for any fallback."""
     caps = compute_capabilities() if capabilities is None else capabilities
-    supported = caps['torch_cuda'] if family == 'v2' else caps['onnx_cuda']
+    supported = caps['torch_cuda'] if family != 'onnx' else caps['onnx_cuda']
     if requested == 'cpu':
         return 'cpu', None
     if supported:
         return 'cuda', None
     if requested == 'cuda':
-        if family == 'v2':
+        if family != 'onnx':
             reason = ('CUDA was requested but PyTorch in this Studio environment cannot use it. '
-                      'Using CPU instead. If you have an NVIDIA GPU, run INSTALL_NVIDIA_GPU_WINDOWS.bat '
-                      'with Studio closed to install matching CUDA-enabled torch and torchaudio.')
+                      'Using CPU instead. For NVIDIA support, install compatible CUDA-enabled torch '
+                      'and torchaudio into the Studio environment.')
         else:
             reason = ('ONNX CUDA was requested, but CUDAExecutionProvider is not installed or available. '
                       'Using CPU instead. ONNX CUDA requires its own compatible onnxruntime-gpu setup.')
@@ -490,13 +501,13 @@ class StudioEngine:
             detail = str(exc)
             if ("couldn't connect to 'https://huggingface.co'" in detail.lower()
                     or "offline mode" in detail.lower() or "local_files_only" in detail.lower()):
-                detail = ("Required model files are not fully cached. Start with RUN_WINDOWS.bat "
+                detail = ("Required model files are not fully cached. Run python studio.py "
                           "(online by default), then select Load model again. "
                           "If Hugging Face keeps disconnecting, try another connection or the "
-                          "optional CONNECT_HF.bat. Original error: " + detail[:500])
+                          "HF_TOKEN in .env. Original error: " + detail[:500])
             elif "Torch not compiled with CUDA enabled" in detail or "CUDA error" in detail:
                 detail = ("PyTorch CUDA is unavailable in Studio's private environment. "
-                          "Select CPU or Auto, or run INSTALL_NVIDIA_GPU_WINDOWS.bat. " + detail[:500])
+                          "Select CPU or Auto, or install matching CUDA PyTorch. " + detail[:500])
             elif "WinError 10054" in detail or "Server disconnected" in detail:
                 detail = ("The Hugging Face connection was reset. Your installed Python environment "
                           "is fine. Retry the model load, or try another network. " + detail[:500])
@@ -541,9 +552,14 @@ class StudioEngine:
             except ImportError:
                 pass
         configure_cpu_threads(device, family)
-        if self.factory is None:
+        if self.factory is None and family in ("v2", "onnx"):
             from kittenml import KittenTTS
             self.factory = KittenTTS
+        if family in ("kokoro", "indic"):
+            model = (KokoroEngine if family == "kokoro" else IndicParlerEngine)(device=device)
+            self.model = model
+            self.current_key = key
+            return model
         if family == "v2":
             kwargs = {"weights": weights, "decoder": decoder}
             kwargs["device"] = device
