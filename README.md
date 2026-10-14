@@ -14,6 +14,7 @@ Optional commands, using that same file:
 
     python studio.py --setup --extras kokoro,indic,alignment
     python studio.py --setup --gpu
+    python studio.py --setup --repair
     python studio.py --offline
     python studio.py --cpu
 
@@ -28,10 +29,13 @@ Optional commands, using that same file:
 | Indic Parler-TTS | Hindi, Nepali, English and others | Named speakers, optional description prompt; no Kitten tag syntax | Apache 2.0, gated downloads |
 | Legacy Kitten ONNX | English | Very small and CPU friendly | Follow model license |
 
-**Indic Parler model access:** First accept terms at https://huggingface.co/ai4bharat/indic-parler-tts, then set `HF_TOKEN` in your environment or copy `.env.example` to `.env`. Never commit credentials. The weights are several GB and are downloaded only when selected.
+**Indic Parler model access:** First accept terms at https://huggingface.co/ai4bharat/indic-parler-tts, then set `HF_TOKEN` in your environment or copy `.env.example` to `.env`. Never commit credentials. The weights are several GB and are downloaded only when selected. Indic Parler is installed in its own `.venv-indic` and runs in a persistent subprocess because it requires an older Transformers version incompatible with KittenTTS. The separate environment consumes additional disk space.
 
 Expression tags, reference cloning and stream-chunk previews remain KittenTTS 2-only. Quality differences are subjective, so audition engines rather than assuming one is universally better. A script render uses one engine and that engine's voices.
 
 Your `.env`, `.venv`, and `data` directories are ignored by Git and retained across source updates. WAV history lives in `data/`.
 
 Run tests with `python -m pytest -q tests` and `node --test tests/*.test.cjs`. Actual inference with optional model weights has to be verified on a GPU/CPU host with downloads enabled.
+### Repair after the older shared-environment installer
+
+If you ran the earlier `--extras indic` command and saw Transformers/Hugging Face/protobuf conflicts, run `python studio.py --setup --repair`. This removes the old Parler packages from the main `.venv` and restores compatible core packages without reinstalling CUDA PyTorch. Then run `python studio.py --setup --extras indic` to set up the separate `.venv-indic`. The CUDA installer now skips working PyTorch builds; optional Indic CUDA can require another PyTorch download because its environment is isolated.
