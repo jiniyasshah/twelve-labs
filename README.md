@@ -39,3 +39,7 @@ Run tests with `python -m pytest -q tests` and `node --test tests/*.test.cjs`. A
 ### Repair after the older shared-environment installer
 
 If you ran the earlier `--extras indic` command and saw Transformers/Hugging Face/protobuf conflicts, run `python studio.py --setup --repair`. This removes the old Parler packages from the main `.venv` and restores compatible core packages without reinstalling CUDA PyTorch. Then run `python studio.py --setup --extras indic` to set up the separate `.venv-indic`. The CUDA installer now skips working PyTorch builds; optional Indic CUDA can require another PyTorch download because its environment is isolated.
+
+### Windows native TorchAudio errors
+
+If the Indic worker reports `Could not load this library: ...libtorchaudio.pyd`, check both environments with `python studio.py --diagnose`. The setup command now validates the actual Parler/TorchAudio imports, and when appropriate attempts to reinstall only a TorchAudio wheel matching the isolated Indic PyTorch build. Manual repair: `python studio.py --setup --repair-indic-audio`. If it still fails, ensure the Microsoft Visual C++ Redistributable x64 is installed; the error can also indicate a missing native DLL. CUDA detection for Indic is independent of the main Studio environment.

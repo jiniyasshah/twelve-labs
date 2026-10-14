@@ -20,6 +20,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sqlite3
 import threading
 import time
@@ -411,19 +412,36 @@ def validate_references(payload: dict) -> None:
                          "Select an existing recording under Clone a voice or upload a new one.")
 
 
+@lru_cache(maxsize=1)
+def indic_cuda_available():
+    """The Indic subprocess has its own PyTorch installation and CUDA status."""
+    exe = ROOT / ".venv-indic" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if not exe.exists():
+        return False
+    try:
+        r = subprocess.run([str(exe), "-c",
+                            "import torch; assert torch.cuda.is_available()"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           timeout=30, cwd=ROOT)
+        return r.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
 def resolve_device(family, requested, capabilities=None):
     """Return a usable device and a plain-language reason for any fallback."""
     caps = compute_capabilities() if capabilities is None else capabilities
     supported = caps['torch_cuda'] if family != 'onnx' else caps['onnx_cuda']
+    if family == 'indic':
+        supported = indic_cuda_available() if capabilities is None else caps.get('indic_cuda', caps['torch_cuda'])
     if requested == 'cpu':
         return 'cpu', None
     if supported:
         return 'cuda', None
     if requested == 'cuda':
         if family != 'onnx':
-            reason = ('CUDA was requested but PyTorch in this Studio environment cannot use it. '
-                      'Using CPU instead. For NVIDIA support, install compatible CUDA-enabled torch '
-                      'and torchaudio into the Studio environment.')
+            target = 'the separate .venv-indic environment' if family == 'indic' else 'Studio'
+            reason = (f'CUDA was requested but PyTorch in {target} cannot use it. '
+                      'Using CPU instead. Run python studio.py --diagnose to check the installations.')
         else:
             reason = ('ONNX CUDA was requested, but CUDAExecutionProvider is not installed or available. '
                       'Using CPU instead. ONNX CUDA requires its own compatible onnxruntime-gpu setup.')
