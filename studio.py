@@ -18,6 +18,9 @@ def python_in(folder):
 
 PYTHON = python_in(ENV)
 INDIC_PYTHON = python_in(INDIC_ENV)
+# Official TorchAudio wheels are published in lockstep with PyTorch.
+INDIC_TORCH_VERSION = "2.11.0"
+CUDA_WHEEL_CHANNEL = "cu128"
 
 def run(python, *args, check=True, silent=False):
     return subprocess.run([str(python), *args], cwd=ROOT, check=check,
@@ -106,38 +109,90 @@ def diagnose():
         print('  TorchAudio:', d.get('torchaudio', d.get('torchaudio_error', 'missing')))
     print('\nIf Indic TorchAudio is broken, use: python studio.py --setup --repair-indic-audio')
 
-def repair_indic_audio():
+def _version_base(version):
+    match = re.match(r'^(\d+\.\d+\.\d+)', str(version or ''))
+    return match.group(1) if match else None
+
+def _indic_pair_healthy(details, cuda):
+    if details.get('error') or details.get('torch_error') or details.get('torchaudio_error'):
+        return False
+    if _version_base(details.get('torch')) != INDIC_TORCH_VERSION:
+        return False
+    if _version_base(details.get('torchaudio')) != INDIC_TORCH_VERSION:
+        return False
+    expected_build = CUDA_WHEEL_CHANNEL if cuda else 'cpu'
+    for name in ('torch', 'torchaudio'):
+        version = details[name]
+        if '+' in version and version.rsplit('+', 1)[1] != expected_build:
+            return False
+    if cuda:
+        return details.get('cuda_build') == '12.8'
+    return not details.get('cuda_build')
+
+def ensure_indic_pair(cuda=False):
+    """Repair only the isolated Indic runtime using a published matching pair.
+
+    The compatible TorchAudio release may lag behind arbitrary PyPI torch
+    versions. Never attempt to install torchaudio==<arbitrary torch version>.
+    """
+    ensure_env(INDIC_ENV)
+    details = runtime_probe(INDIC_PYTHON)
+    if _indic_pair_healthy(details, cuda):
+        print('Indic PyTorch and TorchAudio are compatible; no download needed.')
+        return
+    expected_cuda = '12.8' if cuda else None
+    correct_torch = (_version_base(details.get('torch')) == INDIC_TORCH_VERSION
+                     and details.get('cuda_build') == expected_cuda
+                     and not details.get('torch_error'))
+    channel = CUDA_WHEEL_CHANNEL if cuda else 'cpu'
+    if sys.platform == 'darwin':
+        if cuda:
+            raise RuntimeError('CUDA is not supported on macOS')
+        index = 'https://pypi.org/simple'
+    else:
+        index = f'https://download.pytorch.org/whl/{channel}'
+    packages = [f'torchaudio=={INDIC_TORCH_VERSION}']
+    if not correct_torch:
+        packages.insert(0, f'torch=={INDIC_TORCH_VERSION}')
+        print(f'Indic torch {details.get("torch", "missing")} lacks a supported matching '
+              f'TorchAudio wheel. Installing PyTorch/TorchAudio {INDIC_TORCH_VERSION} '
+              'in .venv-indic only.', flush=True)
+    else:
+        print('Existing Indic PyTorch is compatible; repairing only TorchAudio.', flush=True)
+    cmd = ['-m', 'pip', 'install', '--force-reinstall']
+    # A fresh venv needs PyTorch dependencies. Existing ones should not be
+    # replaced when repairing the native extensions.
+    if details.get('torch'):
+        cmd.append('--no-deps')
+    cmd += packages + ['--index-url', index]
+    run(INDIC_PYTHON, *cmd)
+    after = runtime_probe(INDIC_PYTHON)
+    if not _indic_pair_healthy(after, cuda):
+        raise RuntimeError('Indic native audio still failed validation: ' + str(after)[:600]
+                           + '. On Windows also check the Visual C++ Redistributable x64.')
+    print('Validated isolated Indic Torch/TorchAudio ' + INDIC_TORCH_VERSION
+          + (' CUDA' if cuda else ' CPU'))
+
+def repair_indic_audio(cuda=None):
     if not INDIC_PYTHON.exists():
         raise RuntimeError('Install Indic first: python studio.py --setup --extras indic')
     details = runtime_probe(INDIC_PYTHON)
-    if details.get('torch_error') or not details.get('torch'):
-        raise RuntimeError('Indic PyTorch cannot load. Run python studio.py --diagnose first.')
-    match = re.match(r'^(\d+\.\d+\.\d+)', details['torch'])
-    if not match:
-        raise RuntimeError('Unknown Indic PyTorch version: ' + details['torch'])
-    version = match.group(1)
-    cuda = details.get('cuda_build')
-    index = ('cu' + cuda.replace('.', '')) if cuda else 'cpu'
-    print('Reinstalling only the matching Indic TorchAudio wheel (keeping PyTorch and Studio untouched)...')
-    run(INDIC_PYTHON, '-m', 'pip', 'install', '--force-reinstall', '--no-deps',
-        f'torchaudio=={version}', '--index-url', f'https://download.pytorch.org/whl/{index}')
-    checked = runtime_probe(INDIC_PYTHON)
-    if checked.get('torchaudio_error'):
-        raise RuntimeError('Indic TorchAudio still cannot load: '
-                           + checked['torchaudio_error']
-                           + '\nOn Windows check Microsoft Visual C++ Redistributable x64 and restart.')
-    print('Indic TorchAudio imports successfully.')
+    if cuda is None:
+        cuda = bool(details.get('cuda_build')) and sys.platform != 'darwin'
+    ensure_indic_pair(cuda=cuda)
 
 def indic_imports_ok():
     return imports_ok(INDIC_PYTHON, 'import torch, torchaudio; from parler_tts import ParlerTTSForConditionalGeneration')
 
-def install_extra(name):
+def install_extra(name, gpu=False):
     if name == "kokoro":
         run(PYTHON, "-m", "pip", "install", "kokoro>=0.9.2", "misaki[en]", "espeakng-loader")
     elif name == "alignment":
         run(PYTHON, "-m", "pip", "install", "faster-whisper")
     elif name == "indic":
         ensure_env(INDIC_ENV)
+        previous = runtime_probe(INDIC_PYTHON)
+        ensure_indic_pair(cuda=gpu or bool(previous.get('cuda_build')))
         if not imports_ok(INDIC_PYTHON, "import parler_tts, transformers, torch, soundfile"):
             print("Installing Indic Parler in .venv-indic (isolated from KittenTTS)...", flush=True)
             run(INDIC_PYTHON, "-m", "pip", "install",
@@ -147,7 +202,7 @@ def install_extra(name):
             probe = runtime_probe(INDIC_PYTHON)
             if probe.get('torchaudio_error'):
                 print("TorchAudio native extension failed. Attempting a matching-wheel repair...", flush=True)
-                repair_indic_audio()
+                repair_indic_audio(cuda=gpu or bool(probe.get('cuda_build')))
             if not indic_imports_ok():
                 raise RuntimeError("Indic Parler cannot load. Run python studio.py --diagnose and "
                                    "check the separate .venv-indic environment.")
@@ -158,6 +213,9 @@ def cuda_ready(python):
     return imports_ok(python, "import torch; assert torch.cuda.is_available()")
 
 def install_gpu(python):
+    if python == INDIC_PYTHON:
+        ensure_indic_pair(cuda=True)
+        return
     if cuda_ready(python):
         print("CUDA PyTorch already works in", python.parent.parent.name, "— skipping download.")
         return
@@ -168,7 +226,8 @@ def install_gpu(python):
         print("Check the NVIDIA driver, available GPU memory, and python studio.py --diagnose")
         return
     print("Installing CUDA PyTorch for", python.parent.parent.name, flush=True)
-    run(python, "-m", "pip", "install", "--upgrade", "torch", "torchaudio",
+    run(python, "-m", "pip", "install", "--upgrade",
+        f"torch=={INDIC_TORCH_VERSION}", f"torchaudio=={INDIC_TORCH_VERSION}",
         "--index-url", "https://download.pytorch.org/whl/cu128")
     if not cuda_ready(python):
         print("WARNING: CUDA still unavailable here. CPU generation remains possible.")
@@ -193,22 +252,22 @@ def main():
         diagnose()
         return
     if args.repair_indic_audio:
-        repair_indic_audio()
+        repair_indic_audio(cuda=True if args.gpu else None)
     if args.repair:
         repair_base()
     install_base()
     extras = [e.strip().lower() for e in args.extras.split(",") if e.strip()]
     for extra in extras:
-        install_extra(extra)
+        install_extra(extra, gpu=args.gpu)
     if args.gpu:
         install_gpu(PYTHON)
         if INDIC_PYTHON.exists():
             install_gpu(INDIC_PYTHON)
     if args.setup and INDIC_PYTHON.exists():
         info = runtime_probe(INDIC_PYTHON)
-        if info.get('torchaudio_error'):
-            print("WARNING: Indic TorchAudio is broken: " + info['torchaudio_error'])
-            print("Run python studio.py --setup --repair-indic-audio")
+        if info.get('torchaudio_error') or not info.get('torchaudio'):
+            raise RuntimeError("Indic native audio failed validation: " +
+                               str(info.get('torchaudio_error', info))[:500])
     if not pip_ok(PYTHON):
         print("WARNING: Base environment has dependency conflicts. "
               "Run python studio.py --setup --repair", flush=True)
