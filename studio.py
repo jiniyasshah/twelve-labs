@@ -161,6 +161,12 @@ def install_gpu(python):
     if cuda_ready(python):
         print("CUDA PyTorch already works in", python.parent.parent.name, "— skipping download.")
         return
+    report = runtime_probe(python)
+    if report.get("cuda_build"):
+        print("CUDA-enabled PyTorch is already installed in", python.parent.parent.name,
+              "but the GPU is unavailable. Skipping a costly re-download.")
+        print("Check the NVIDIA driver, available GPU memory, and python studio.py --diagnose")
+        return
     print("Installing CUDA PyTorch for", python.parent.parent.name, flush=True)
     run(python, "-m", "pip", "install", "--upgrade", "torch", "torchaudio",
         "--index-url", "https://download.pytorch.org/whl/cu128")
