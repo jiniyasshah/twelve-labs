@@ -59,6 +59,7 @@ class NativeAudioTests(unittest.TestCase):
         self.assertIn("https://download.pytorch.org/whl/cpu", args)
         self.assertNotIn("torchaudio==2.14.1", args)
 
+    @unittest.skipIf(sys.platform == "darwin", "NVIDIA CUDA is unavailable on macOS")
     def test_cuda_repair_uses_matching_cuda_pair(self):
         before = {"torch": "2.14.1", "cuda_build": None,
                   "torchaudio_error": "missing binary"}
