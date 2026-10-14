@@ -82,7 +82,7 @@ def install_gpu(python):
         print("CUDA PyTorch already works in", python.parent.parent.name, "— skipping download.")
         return
     print("Installing CUDA PyTorch for", python.parent.parent.name, flush=True)
-    run(python, "-m", "pip", "install", "torch", "torchaudio",
+    run(python, "-m", "pip", "install", "--upgrade", "torch", "torchaudio",
         "--index-url", "https://download.pytorch.org/whl/cu128")
     if not cuda_ready(python):
         print("WARNING: CUDA still unavailable here. CPU generation remains possible.")
