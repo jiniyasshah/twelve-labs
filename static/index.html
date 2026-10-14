@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f7f5">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("kitten-studio-theme")|| (matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch{}</script>
+  <title>Kitten Studio — Text to speech</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script defer src="/static/auto_markup.js"></script>
+  <script defer src="/static/app.js"></script>
+  <script defer src="/static/edit_direction.js"></script>
+  <script defer src="/static/edit_audio.js"></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar" aria-label="Main navigation">
+    <a class="brand" href="/" aria-label="Kitten Studio home">
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M6 13V5l7 5 3-1 3 1 7-5v8c1.2 2.1 1.2 7.8-1.2 10.9-2.5 2.8-6.1 4.1-8.8 4.1s-6.3-1.3-8.8-4.1C4.8 20.8 4.8 15.1 6 13Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10.8 18.1h.1m10.2 0h.1M13 22c1.9 1.8 4.1 1.8 6 0" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg></span>
+      <span>kitten<span class="brand-light">studio</span></span>
+    </a>
+    <div class="side-category">WORKSPACE</div>
+    <nav class="nav" id="navigation">
+      <button type="button" class="nav-link active" data-view="speech"><span class="nav-glyph">▤</span> Speech</button>
+      <button type="button" class="nav-link" data-view="script"><span class="nav-glyph">☷</span> Script builder</button>
+      <button type="button" class="nav-link" data-view="voices"><span class="nav-glyph">◉</span> Voices</button>
+      <button type="button" class="nav-link" data-view="edit"><span class="nav-glyph">◫</span> Edit audio</button>
+      <button type="button" class="nav-link" data-view="library"><span class="nav-glyph">▧</span> History</button>
+    </nav>
+    <div class="side-bottom">
+      <div class="local-badge"><span class="tiny-dot"></span> Runs locally</div>
+      <p>All generated audio is saved on this computer.</p>
+      <button id="help-button" type="button" class="text-link">Setup &amp; connection help ↗</button>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <header class="topbar">
+      <button type="button" class="mobile-menu" id="mobile-menu" aria-label="Toggle navigation">☰</button>
+      <span class="breadcrumb">Workspace <span>/</span> <strong id="section-name">Speech</strong></span>
+      <div class="topbar-actions"><button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch to dark mode" title="Switch appearance">☾</button><span class="system-status" id="system-status"><span class="status-led"></span> Engine idle</span><button class="button tiny-button" id="top-load" type="button">Load model</button></div>
+    </header>
+
+    <main class="content">
+      <section class="view active" id="view-speech" aria-labelledby="speech-heading">
+        <div class="page-heading"><div><p class="eyebrow">TEXT TO SPEECH</p><h1 id="speech-heading">Create speech</h1><p class="page-subtitle">Natural narration, exactly how you want it.</p></div></div>
+        <div class="work-grid">
+          <div class="work-column">
+            <section class="panel editor-panel">
+              <div class="panel-top"><h2>Text</h2><span class="subtle" id="text-count">0 characters</span></div>
+              <textarea id="speech-text" class="speech-text" spellcheck="true" placeholder="Type or paste what you want the voice to say…">Hello there. Welcome to Kitten Studio. This voice was generated entirely on my computer.</textarea>
+              <div class="editor-footer"><div class="toolbar"><button type="button" id="add-emotion" class="soft-button" title="Add an emotion tag">＋ Emotion</button><button type="button" id="add-event" class="soft-button" title="Add a vocal event">＋ Event</button><button type="button" id="add-emphasis" class="soft-button" title="Emphasize selected text">Emphasis</button><span class="toolbar-divider" aria-hidden="true"></span><button type="button" id="auto-direct" class="soft-button auto-direct-button" title="Suggest emotions, events and emphasis for this narration">✦ Auto-direct</button><button type="button" id="undo-auto" class="text-link undo-auto" hidden>Undo auto tags</button></div><div class="toolbar"><label class="file-action">Import text<input id="text-file" type="file" accept=".txt,text/plain" hidden></label><button type="button" id="clear-text" class="text-link">Clear</button></div></div>
+            </section>
+            <section class="panel source-panel">
+              <div class="panel-top"><h2>Voice</h2><button type="button" id="browse-voices" class="text-link">Browse all voices →</button></div>
+              <div class="tabs small-tabs" id="source-tabs"><button type="button" data-source="builtin" class="active">Built-in voice</button><button type="button" data-source="clone">Clone a voice</button></div>
+              <div id="source-builtin" class="source-body"><div class="voice-chooser"><div class="voice-avatar" id="selected-avatar">B</div><div class="grow"><label for="voice-select">Selected voice</label><select id="voice-select" class="field-select"></select><p id="voice-description" class="helper">Confident narrator</p></div></div></div>
+              <div id="source-clone" class="source-body" hidden><div class="field" id="saved-reference-field"><label for="reference-select">Saved voice recordings</label><select id="reference-select" class="field-select"><option value="">Select a saved reference…</option></select><p class="helper" id="reference-status">Select a reference or upload a new one.</p></div><div class="upload-row"><label class="upload-control" for="voice-upload"><span class="upload-icon">↑</span><span><strong id="upload-title">Select a reference recording</strong><small>5–30 seconds, one speaker · WAV preferred</small></span><input type="file" id="voice-upload" accept=".wav,.flac,.mp3,.m4a,.ogg,audio/*" hidden></label><audio controls id="reference-audio" hidden></audio></div><label class="field-label" for="reference-text">Transcript of recording <span class="optional">Optional</span></label><textarea id="reference-text" rows="2" class="small-textarea" placeholder="Enter the words spoken in the reference clip. Skips automatic transcription downloads."></textarea><p class="helper">Use recordings of your own voice or voices you have permission to reproduce.</p></div>
+            </section>
+            <div class="generate-row"><div><span id="estimate">Ready to generate</span><p class="helper">WAV · 24 kHz · Saved automatically</p></div><button type="button" id="generate-speech" class="button primary generate-button">Generate speech <span aria-hidden="true">↗</span></button></div>
+            <section class="panel output-panel" id="output-panel" hidden><div class="panel-top"><h2>Latest result</h2><a id="output-download" href="#" download class="text-link">Download WAV ↘</a></div><div class="result-main"><div class="wave-art" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="result-title"><strong id="output-title">Generated audio</strong><span id="output-meta" class="helper"></span></div></div><p id="output-benchmark" class="helper" hidden></p><audio id="output-audio" controls preload="none"></audio></section>
+          </div>
+          <aside class="settings-column" aria-label="Generation settings">
+            <section class="panel setting-panel"><div class="panel-top"><h2>Model &amp; settings</h2><span class="info-icon" title="Changes to model, weights, or decoder reload the engine">ⓘ</span></div>
+              <div class="field"><label for="model-select">Model</label><select class="field-select" id="model-select"></select><small class="field-note" id="model-description">Full speech and cloning controls</small></div>
+              <div class="field"><label for="device-select">Compute</label><select class="field-select" id="device-select"><option value="auto">Auto-detect (recommended)</option><option value="cpu">CPU</option><option value="cuda">NVIDIA CUDA</option></select><p id="compute-note" class="helper" aria-live="polite">Checking available compute...</p></div>
+              <div id="v2-model-options" class="dual-fields"><div class="field"><label for="weights-select">Weights</label><select class="field-select" id="weights-select"><option value="emb4">Compact</option><option value="packed">Standard</option><option value="full">Full BF16</option></select></div><div class="field"><label for="decoder-select">Decoder</label><select class="field-select" id="decoder-select"><option value="default">Default</option><option value="student_w4">Student 4-bit</option></select></div></div>
+              <div id="v2-generation-options"><div class="field"><label>Delivery</label><div class="segmented" id="preset-tabs"><button data-preset="stable" type="button" class="active">Stable</button><button data-preset="expressive" type="button">Expressive</button></div></div><div class="field"><label for="loop-protection">Repeat protection</label><select class="field-select" id="loop-protection"><option value="off">Model defaults · unchanged</option><option value="gentle">Gentle · fewer loops</option><option value="strong">Stronger · more intervention</option></select><p class="helper">Optional. Changes only repetition sampling rules; try Gentle if speech repeats. Results may sound different, so defaults stay untouched.</p></div><label class="check-line"><input type="checkbox" id="normalize" checked><span>Normalize English text</span></label><label class="check-line"><input type="checkbox" id="streaming"><span>Preview chunks while generating</span></label></div>
+              <div id="onnx-options" hidden><div class="field"><label for="speed">Speech speed <span id="speed-display">1.00×</span></label><input type="range" id="speed" min="0.5" max="2" value="1" step="0.05"></div><p class="helper">Legacy models have 8 voices, without cloning or expression controls.</p></div>
+              <details id="advanced-panel" class="advanced"><summary>Advanced controls <span>⌄</span></summary><div class="advanced-inner"><div class="field"><label for="max-tokens">Max tokens per chunk</label><input id="max-tokens" type="number" min="100" max="5000" value="1000"></div><div class="field"><label for="reference-prompt">Reference audio prompt</label><select id="reference-prompt" class="field-select"><option value="auto">Model default</option><option value="on">On</option><option value="off">Off</option></select></div><div class="two-inputs"><div class="field"><label for="temperature">Temperature</label><input id="temperature" type="number" step="0.05" min="0.1" max="2" placeholder="Auto"></div><div class="field"><label for="top-k">Top K</label><input id="top-k" type="number" min="0" max="500" placeholder="Auto"></div><div class="field"><label for="top-p">Top P</label><input id="top-p" type="number" step="0.05" min="0.01" max="1" placeholder="Auto"></div><div class="field"><label for="min-p">Min P</label><input id="min-p" type="number" step="0.01" min="0" max="1" placeholder="Auto"></div><div class="field"><label for="seed">Random seed</label><input id="seed" type="number" min="0" max="4294967295" placeholder="Random"></div><div class="field"><label for="repetition-penalty">Repetition penalty</label><input id="repetition-penalty" type="number" min="0.1" max="5" step="0.1" placeholder="Auto"></div><div class="field"><label for="repetition-window">Repetition window</label><input id="repetition-window" type="number" min="1" max="10000" placeholder="Auto"></div><div class="field"><label for="token-run-penalty">Token run penalty</label><input id="token-run-penalty" type="number" min="0.1" max="5" step="0.1" placeholder="Auto"></div><div class="field"><label for="token-run-grace">Token run grace</label><input id="token-run-grace" type="number" min="1" max="1000" placeholder="Auto"></div><div class="field"><label for="chunk-chars">Chunk characters</label><input id="chunk-chars" type="number" min="80" max="3000" placeholder="Auto"></div><div class="field"><label for="chunk-min-chars">Minimum chunk size</label><input id="chunk-min-chars" type="number" min="20" max="3000" placeholder="Auto"></div><div class="field"><label for="chunk-gap">Chunk gap (seconds)</label><input id="chunk-gap" type="number" min="0" max="3" step="0.05" placeholder="Auto"></div></div><div class="field"><label for="emotion-mode">Emotion conditioning</label><select id="emotion-mode" class="field-select"><option value="auto">Automatic</option><option value="on">On</option><option value="off">Off</option></select></div><button type="button" id="reset-advanced" class="text-link">Reset advanced settings</button></div></details>
+            </section>
+            <div class="setup-note"><span id="connection-indicator" class="tiny-dot"></span><div><strong id="connection-label">Model files use your local cache</strong><p id="connection-note">Missing assets are downloaded when needed. The studio uses only its private Python environment.</p></div></div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view" id="view-script" aria-labelledby="script-heading" hidden>
+        <div class="page-heading"><div><p class="eyebrow">MULTI-VOICE PRODUCTION</p><h1 id="script-heading">Script builder</h1><p class="page-subtitle">Arrange dialogue and narration into one audio file.</p></div><div class="page-actions"><button type="button" id="auto-direct-script" class="button auto-script-button">✦ Auto-direct script</button><button type="button" id="undo-auto-script" class="text-link undo-auto" hidden>Undo tags</button><button type="button" id="add-scene" class="button">＋ Add scene</button></div></div>
+        <div class="script-layout"><div id="scene-list" class="scene-list"></div><div class="panel script-summary"><h2>Export settings</h2><p class="helper">Create individual WAV files for every scene and one combined recording.</p><div class="metric"><span>Scenes</span><strong id="scene-count">1</strong></div><div class="metric"><span>Characters</span><strong id="scene-chars">0</strong></div><div class="field"><label for="scene-gap">Pause between scenes (seconds)</label><input type="number" min="0" max="3" step="0.1" value="0.4" id="scene-gap"></div><button type="button" id="generate-script" class="button primary full">Generate script ↗</button></div></div>
+      </section>
+
+      <section class="view" id="view-voices" aria-labelledby="voices-heading" hidden>
+        <div class="page-heading"><div><p class="eyebrow">VOICE LIBRARY</p><h1 id="voices-heading">Choose a voice</h1><p class="page-subtitle">Browse built-in speakers and select one for your next recording.</p></div></div>
+        <div class="filter-line"><input id="voice-search" class="search" placeholder="Search speakers or descriptions…" aria-label="Search voices"><div class="pills" id="voice-filter"><button data-lang="all" class="active">All</button><button data-lang="English">English</button><button data-lang="other">Other languages</button></div></div><div id="voice-cards" class="voice-cards"></div>
+      </section>
+
+      <section class="view" id="view-edit" aria-labelledby="edit-heading" hidden>
+        <div class="page-heading"><div><p class="eyebrow">SENTENCE-LEVEL AUDIO EDITOR</p><h1 id="edit-heading">Edit existing speech</h1><p class="page-subtitle">Replace one sentence without regenerating the whole recording.</p></div><button type="button" class="button" id="edit-open-history">Choose recording ↗</button></div>
+        <div class="panel audio-edit-panel">
+          <div class="panel-top"><h2 id="edit-record-name">Select a recording from History</h2><span class="helper" id="edit-duration">00:00</span></div>
+          <div id="edit-empty" class="edit-placeholder"><strong>Keep the good takes. Fix just the sentence.</strong><p>Open any saved recording from History and choose Edit speech. The original audio will always be preserved.</p></div>
+          <div id="edit-workspace" hidden>
+            <div class="wave-container"><canvas id="edit-waveform" height="130" aria-label="Waveform with detected sentence regions" role="img"></canvas><div class="wave-labels"><span>0:00</span><span id="edit-wave-end">0:00</span></div></div>
+            <audio id="edit-original-audio" controls preload="metadata"></audio>
+            <div class="edit-toolbar"><button type="button" class="button" id="edit-align">↻ Detect sentences</button><span class="helper" id="edit-align-method">Not aligned yet. Detection uses a small local Whisper model.</span></div>
+            <p class="editor-warning" id="edit-editor-warning">Automatic sentence boundaries are estimates. Listen and adjust before applying.</p>
+            <div class="edit-split">
+              <div class="edit-sentences"><div class="edit-section-title"><h2>Transcript</h2><span class="helper" id="edit-sentence-count">0 sentences</span></div><div id="edit-sentence-list" class="edit-sentence-list"></div></div>
+              <div class="edit-inspector"><div class="edit-section-title"><h2>Selected sentence</h2><span class="helper" id="edit-confidence"></span></div>
+                <label class="field-label" for="edit-replacement">Replacement narration</label><textarea id="edit-replacement" class="small-textarea edit-textarea" spellcheck="true" rows="5" placeholder="Select a sentence from the left…"></textarea>
+                <div id="edit-direction-panel" class="edit-direction-panel" aria-label="Sentence delivery tools">
+                  <div class="edit-direction-head"><div><strong>Direct this sentence</strong><span class="helper">Expression cues only affect the replacement, not the other sentences.</span></div><span class="edit-beta">KittenTTS 2 · beta</span></div>
+                  <div class="edit-direction-controls">
+                    <div class="edit-direction-field"><label for="edit-emotion">Emotion</label><select class="field-select" id="edit-emotion" aria-label="Emotion for selected sentence"><option value="">No emotion</option><option value="angry">Angry</option><option value="contemplative">Contemplative</option><option value="excited">Excited</option><option value="joyful">Joyful</option><option value="mundane">Mundane</option><option value="nervous">Nervous</option><option value="sad">Sad</option><option value="stern">Stern</option><option value="surprised">Surprised</option><option value="tender">Tender</option></select></div>
+                    <div class="edit-direction-field"><label for="edit-event">Vocal event</label><div class="edit-inline-field"><select class="field-select" id="edit-event" aria-label="Event to insert at cursor"><option value="" selected>Choose an event…</option><option value="gasp">Gasp</option><option value="giggle">Giggle</option><option value="growl">Growl</option><option value="gulp">Gulp</option><option value="laugh">Laugh</option><option value="pause">Pause</option><option value="scoff">Scoff</option><option value="sigh">Sigh</option><option value="sob">Sob</option><option value="um">Um</option></select><button type="button" id="edit-add-event" class="button" title="Insert event where your cursor was in the sentence">Insert</button></div></div>
+                    <div class="edit-direction-field"><label for="edit-delivery">Delivery preset</label><select class="field-select" id="edit-delivery" aria-label="Delivery preset for replacement"><option value="original">Keep original</option><option value="stable">Stable</option><option value="expressive">Expressive</option></select></div>
+                  </div>
+                  <div class="edit-direction-actions"><button type="button" id="edit-emphasis" class="button">((( Emphasize selection )))</button><button type="button" id="edit-clear-cues" class="text-link">Clear cues</button><button type="button" id="edit-undo-direction" class="text-link" disabled>Undo change</button></div>
+                  <p class="helper edit-direction-hint" id="edit-direction-hint" aria-live="polite">Select words to emphasize, or place the cursor anywhere to insert an event.</p>
+                </div>
+                <p id="edit-onnx-direction-note" class="helper" hidden>Expression markup requires KittenTTS 2; the legacy ONNX models do not support emotions, vocal events, or emphasis.</p>
+                <div class="dual-fields edit-time-fields"><div class="field"><label for="edit-start">Start (seconds)</label><input id="edit-start" type="number" min="0" step="0.01"></div><div class="field"><label for="edit-end">End (seconds)</label><input id="edit-end" type="number" min="0" step="0.01"></div></div>
+                <button type="button" class="text-link" id="edit-listen">▶ Play selected region</button>
+                <div class="edit-actions"><button type="button" class="button" id="edit-preview" disabled>Generate replacement preview</button></div>
+                <div id="edit-preview-wrap" class="edit-preview" hidden><p class="helper">Listen before applying. The rest of the original recording stays unchanged.</p><audio id="edit-preview-audio" controls></audio><button type="button" class="button primary full" id="edit-apply">Replace selected sentence ↗</button></div>
+                <p class="helper edit-status" id="edit-job-status" aria-live="polite"></p>
+              </div>
+            </div>
+            <p class="helper edit-footnote">Non-destructive editing: each accepted change creates a new History item. The replacement may change the overall duration; tiny crossfades smooth the joins. Re-detect sentence positions before making another edit.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-library" aria-labelledby="library-heading" hidden>
+        <div class="page-heading"><div><p class="eyebrow">LOCAL RECORDINGS</p><h1 id="library-heading">Generation history</h1><p class="page-subtitle">Search, replay and reuse all your previous generations.</p></div><button type="button" id="refresh-library" class="button">Refresh ↻</button></div><div class="filter-line history-filters"><input id="library-search" class="search" placeholder="Search text, voice or title…" aria-label="Search generation history"><select class="field-select history-filter" id="history-kind" aria-label="Filter generation type"><option value="all">All recordings</option><option value="speech">Speech</option><option value="script">Full scripts</option><option value="segment">Segments</option><option value="edited">Edited versions</option></select></div><p class="helper history-count" id="history-count">Loading history…</p><div class="panel library-panel"><div class="library-header"><span>Recording</span><span>Length</span><span>Actions</span></div><div id="library-items"></div></div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div class="job-tray" id="job-tray" hidden role="status" aria-live="polite"><div class="job-top"><span class="spinner" id="job-spinner"></span><strong id="job-title">Preparing model</strong><button type="button" id="close-job" class="icon-button" aria-label="Dismiss job status">×</button></div><p id="job-message" class="helper">Loading model…</p><p id="job-benchmark" class="helper" hidden></p><div class="progress"><div id="job-progress"></div></div><div id="chunk-links" class="chunk-links"></div><button type="button" id="cancel-job" class="text-link">Cancel queued job</button></div>
+<div class="toast" id="toast" hidden role="alert"></div>
+<dialog id="auto-dialog" class="dialog auto-dialog" aria-labelledby="auto-heading">
+  <div class="dialog-head"><div><p class="eyebrow">NARRATION ASSISTANT</p><h2 id="auto-heading">Auto-direct narration</h2></div><button type="button" class="icon-button dialog-close" aria-label="Close assistant">×</button></div>
+  <p class="auto-desc">Suggest delivery cues from your script. Review before applying — your existing tags stay intact.</p>
+  <div class="auto-controls"><div class="field"><label for="auto-strength">Direction intensity</label><select id="auto-strength" class="field-select"><option value="subtle">Subtle · very selective</option><option value="balanced" selected>Balanced · natural</option><option value="expressive">Expressive · more cues</option></select></div>
+    <div class="auto-checkboxes"><label class="check-line"><input id="auto-emotions" type="checkbox" checked> Emotions</label><label class="check-line"><input id="auto-events" type="checkbox" checked> Vocal events</label><label class="check-line"><input id="auto-emphasis" type="checkbox" checked> Emphasis</label></div></div>
+  <div class="auto-preview-top"><strong>Preview changes</strong><span class="helper" id="auto-stats" aria-live="polite">Analyzing…</span></div>
+  <div class="auto-preview-grid"><div><label for="auto-original">Original</label><textarea id="auto-original" readonly spellcheck="false"></textarea></div><div><label for="auto-proposal">Suggested</label><textarea id="auto-proposal" readonly spellcheck="false"></textarea></div></div>
+  <p class="auto-disclaimer">Runs locally using contextual rules, not a language model. Results are suggestions, and KittenTTS expression control is experimental.</p>
+  <div class="dialog-actions"><button type="button" class="button dialog-close">Cancel</button><button type="button" id="auto-apply" class="button primary">Apply suggestions</button></div>
+</dialog>
+<dialog id="tag-dialog" class="dialog"><div class="dialog-head"><h2 id="tag-title">Insert emotion</h2><button type="button" class="icon-button dialog-close">×</button></div><p class="helper" id="tag-helper">Choose a direction for the voice.</p><div id="tag-items" class="tag-grid"></div></dialog>
+<dialog id="confirm-dialog" class="dialog"><div class="dialog-head"><h2>Delete recording?</h2><button type="button" class="icon-button dialog-close">×</button></div><p class="helper">This will permanently delete the selected WAV file from your computer.</p><div class="dialog-actions"><button type="button" class="button dialog-close">Keep recording</button><button type="button" class="button destructive" id="confirm-delete">Delete recording</button></div></dialog>
+<dialog id="help-dialog" class="dialog help-dialog"><div class="dialog-head"><h2>Setup &amp; connection</h2><button type="button" class="icon-button dialog-close">×</button></div><p>Kitten Studio uses its own <code>kitten-studio\.venv</code>. It never runs inside your older KittenTTS environment.</p><p>Models download automatically from Hugging Face if missing. To authenticate, set the standard <code>HF_TOKEN</code> environment variable or create a local <code>.env</code> file containing <code>HF_TOKEN=your_new_token</code>, then restart. The app never displays your token, and a token is not required for public models.</p><p>Windows launcher <strong>RUN_WINDOWS.bat</strong> defaults to online with cache reuse. Use <strong>RUN_WINDOWS_OFFLINE.bat</strong> only after all model assets are cached.</p><p>Downloads still depend on Hugging Face connectivity. If Windows reports <code>WinError 10054</code>, try a different network or retry; authentication cannot fix a blocked TLS connection.</p><button type="button" class="button dialog-close">Close</button></dialog>
+</body>
+</html>
