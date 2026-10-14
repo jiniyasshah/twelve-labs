@@ -26,7 +26,7 @@ class InstallerIsolationTests(unittest.TestCase):
         studio.install_gpu(studio.PYTHON)
         self.assertEqual(run.call_count, 1)
         self.assertIn("--upgrade", run.call_args.args)
-        self.assertIn("cu128", " ".join(run.call_args.args))
+        self.assertIn("cu128", " ".join(map(str, run.call_args.args)))
 
     def test_worker_uses_isolated_python(self):
         backend = (ROOT / "model_backends.py").read_text(encoding="utf-8")
