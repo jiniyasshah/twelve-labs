@@ -25,16 +25,18 @@ class KokoroEngine:
             raise RuntimeError('Kokoro is not installed. Run: python studio.py --setup --extras kokoro') from exc
         self.device = device
         model = KModel(repo_id='hexgrad/Kokoro-82M').to(device).eval()
-        self.pipelines = {
-            'a': KPipeline(lang_code='a', model=model, repo_id='hexgrad/Kokoro-82M'),
-            'b': KPipeline(lang_code='b', model=model, repo_id='hexgrad/Kokoro-82M'),
-            'h': KPipeline(lang_code='h', model=model, repo_id='hexgrad/Kokoro-82M'),
-        }
+        self.model = model
+        self.pipelines = {}
+        self.pipeline_type = KPipeline
     def generate(self, text, voice='af_heart', **_):
         if voice not in KOKORO_VOICES:
             raise ValueError('Unknown Kokoro voice')
+        lang_code = voice[0]
+        if lang_code not in self.pipelines:
+            self.pipelines[lang_code] = self.pipeline_type(
+                lang_code=lang_code, model=self.model, repo_id='hexgrad/Kokoro-82M')
         parts = [np.asarray(audio, dtype=np.float32).reshape(-1)
-                 for _, _, audio in self.pipelines[voice[0]](text, voice=voice)]
+                 for _, _, audio in self.pipelines[lang_code](text, voice=voice)]
         if not parts:
             raise ValueError('Kokoro produced no audio')
         return np.concatenate(parts)
@@ -65,7 +67,8 @@ class IndicParlerEngine:
             raise ValueError('Unknown Indic Parler voice')
         speaker = voice.split(' · ', 1)[1]
         prompt = f"{speaker}'s voice delivers natural, clear speech at a moderate pace. The recording is of very high quality, with very clear audio and no background noise."
-        description = self.description_tokenizer(description or prompt, return_tensors='pt').to(self.device)
+        directed = f"{speaker}'s voice. {description}" if description else prompt
+        description = self.description_tokenizer(directed, return_tensors='pt').to(self.device)
         utterance = self.prompt_tokenizer(text, return_tensors='pt').to(self.device)
         with torch.inference_mode():
             audio = self.model.generate(
