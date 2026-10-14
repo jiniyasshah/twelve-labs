@@ -31,6 +31,15 @@ class NativeAudioTests(unittest.TestCase):
         self.assertIn("https://download.pytorch.org/whl/cu128", args)
         self.assertNotIn("torch", args)
 
+    def test_preexisting_cuda_build_does_not_trigger_redownload(self):
+        with patch.object(studio, "cuda_ready", return_value=False), \
+             patch.object(studio, "runtime_probe", return_value={
+                 "torch": "2.11.0+cu128", "cuda_build": "12.8",
+                 "cuda_available": False}), \
+             patch.object(studio, "run") as runner:
+            studio.install_gpu(studio.INDIC_PYTHON)
+        runner.assert_not_called()
+
     def test_indic_cuda_probes_isolated_environment(self):
         with patch.object(server, "compute_capabilities", return_value={
             "torch_cuda": False, "onnx_cuda": False}), \
