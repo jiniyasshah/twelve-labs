@@ -2,6 +2,10 @@
 // Kitten Studio: framework-free, private local UI.
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+const EXTRA_VOICES = {
+  'hexgrad/Kokoro-82M':['af_heart','af_bella','af_nicole','am_adam','am_michael','bf_emma','bm_george','hf_alpha','hf_beta','hm_omega','hm_psi'],
+  'ai4bharat/indic-parler-tts':['Hindi · Rohit','Hindi · Divya','Hindi · Aman','Hindi · Rani','Nepali · Amrita','English · Mary','English · Thoma']
+};
 const ONNX_VOICES = ['Bella','Jasper','Luna','Bruno','Rosie','Hugo','Kiki','Leo'];
 const KEY = 'kitten-studio-v2-draft';
 const ADVANCED = {
@@ -42,7 +46,7 @@ function saveDraft() {
   const values={};
   const ids=['speech-text','model-select','device-select','weights-select','decoder-select','normalize','streaming',
     'speed','max-tokens','reference-prompt','temperature','top-k','top-p','min-p','emotion-mode','reference-text',
-    'scene-gap','loop-protection', ...Object.keys(ADVANCED)];
+    'scene-gap','loop-protection','indic-description', ...Object.keys(ADVANCED)];
   for(const id of ids){const el=$('#'+id);if(el)values[id]=el.type==='checkbox'?el.checked:el.value;}
   try { localStorage.setItem(KEY,JSON.stringify({values,voice:state.voice,preset:state.preset,source:state.source,segments:state.segments,referenceId:state.referenceId,referenceName:state.referenceName})); } catch{}
 }
@@ -66,7 +70,7 @@ function modelConfig(){return {model:$('#model-select').value,device:$('#device-
 function voices(){
   const model=$('#model-select').value, key=state.info?.engine?.key;
   if(state.info?.engine?.ready&&key?.[0]===model&&state.info.engine.voices?.length)return state.info.engine.voices;
-  return isV2()?Object.keys(state.info?.profiles||{Bruno:[],Luna:[],Bella:[]}):ONNX_VOICES;
+  return EXTRA_VOICES[model] || (isV2()?Object.keys(state.info?.profiles||{Bruno:[],Luna:[],Bella:[]}).filter(v=>!Object.values(EXTRA_VOICES).some(group=>group.includes(v))):ONNX_VOICES);
 }
 function voiceInfo(voice){return state.info?.profiles?.[voice]||['Natural voice','English'];}
 function selectedVoice(){return state.source==='clone'?'__clone__':state.voice;}
@@ -95,9 +99,11 @@ function renderSource(){
 }
 function renderModel(){
   const v2=isV2(); $('#v2-model-options').hidden=!v2;$('#v2-generation-options').hidden=!v2;
-  $('#onnx-options').hidden=v2;$('#advanced-panel').hidden=!v2;
+  const family=state.info?.models?.[$('#model-select').value]?.family;
+  $('#onnx-options').hidden=family!=='onnx';$('#indic-options').hidden=family!=='indic';$('#advanced-panel').hidden=!v2;
   const model=$('#model-select').value;$('#model-description').textContent=state.info?.models?.[model]?.size||'';
-  const onnxCuda=$('#device-select option[value="cuda"]');onnxCuda.textContent=v2?'NVIDIA CUDA':'CUDA (requires ONNX GPU runtime)';
+  const voiceModel=$('#voice-model-select');if(voiceModel){voiceModel.innerHTML=$('#model-select').innerHTML;voiceModel.value=model;}
+  const onnxCuda=$('#device-select option[value="cuda"]');onnxCuda.textContent=family==='onnx'?'CUDA (requires ONNX GPU runtime)':'NVIDIA CUDA';
   $('#add-emotion').disabled=!v2;$('#add-event').disabled=!v2;$('#add-emphasis').disabled=!v2;$('#auto-direct').disabled=!v2;$('#auto-direct-script').disabled=!v2;
   renderSource();renderSegments();updateReady();saveDraft();
 }
@@ -120,6 +126,7 @@ function selectView(view){
 }
 function configPayload(){
   const payload={...modelConfig(),preset:state.preset,normalize:$('#normalize').checked,streaming:$('#streaming').checked,speed:Number($('#speed').value),loop_protection:$('#loop-protection').value};
+  if(state.info?.models?.[payload.model]?.family==='indic')payload.description=$('#indic-description').value.trim();
   if(!isV2())return payload;
   payload.max_new_tokens=Number($('#max-tokens').value)||1000;
   payload.use_reference_prompt=$('#reference-prompt').value;
@@ -205,20 +212,20 @@ async function loadInfo(){
   if(!result.models[$('#model-select').value])$('#model-select').value='KittenML/kitten-tts-2';
   renderModel();renderPresets();updateComputeNote();
   $('#connection-label').textContent=result.engine.offline?'Offline mode · cached assets only':result.engine.authenticated?'HF token detected':'Hugging Face · public downloads';
-  $('#connection-note').textContent=result.engine.offline?'Missing files cannot download. Relaunch with RUN_WINDOWS.bat.':result.engine.authenticated?'Credentials found locally (not yet network verified). Downloads use the HF cache.':'Set HF_TOKEN in Windows or a local .env file for authenticated downloads.';
+  $('#connection-note').textContent=result.engine.offline?'Missing files cannot download. Relaunch with python studio.py.':result.engine.authenticated?'Credentials found locally (not yet network verified). Downloads use the HF cache.':'Set HF_TOKEN in Windows or a local .env file for authenticated downloads.';
 }
 function updateComputeNote(){
   const el=$('#compute-note');if(!el)return;
   const info=state.info?.engine?.compute;
   if(!info){el.textContent='CPU works without NVIDIA GPU support.';return;}
-  const family=isV2()?'v2':'onnx';
-  const available=family==='v2'?info.torch_cuda:info.onnx_cuda;
+  const family=state.info?.models?.[$('#model-select').value]?.family||'v2';
+  const available=family!=='onnx'?info.torch_cuda:info.onnx_cuda;
   const selection=$('#device-select').value;
   if(available){el.textContent=family==='v2'?'CUDA acceleration is available in PyTorch.':'ONNX CUDA provider is available.';return;}
   if(selection==='cuda'){
-    el.textContent=family==='v2'?'CUDA is not available in this PyTorch installation. Studio will use CPU. To enable NVIDIA GPU, run INSTALL_NVIDIA_GPU_WINDOWS.bat.':'ONNX CUDA provider is unavailable. Studio will use CPU.';
+    el.textContent=family==='v2'?'CUDA is not available in this PyTorch installation. Studio will use CPU. To enable NVIDIA GPU, run python studio.py --setup --gpu.':'ONNX CUDA provider is unavailable. Studio will use CPU.';
   }else if(family==='v2'&&!info.torch_cuda_build){
-    el.textContent='This installation uses CPU-only PyTorch. Auto selects CPU; optional NVIDIA GPU installer is included.';
+    el.textContent='This installation uses CPU-only PyTorch. Auto selects CPU; run python studio.py --setup --gpu to enable CUDA.';
   }else{
     el.textContent='Auto selects CPU on this machine. No CUDA backend detected.';
   }
@@ -456,6 +463,7 @@ function bindEvents(){
   $$('#source-tabs button').forEach(b=>b.addEventListener('click',()=>{state.source=b.dataset.source;renderSource();saveDraft();}));
   $$('#preset-tabs button').forEach(b=>b.addEventListener('click',()=>{state.preset=b.dataset.preset;renderPresets();saveDraft();}));
   $('#model-select').addEventListener('change',()=>{renderModel();updateComputeNote();});
+  $('#voice-model-select').addEventListener('change',e=>{$('#model-select').value=e.target.value;renderModel();renderVoices();updateComputeNote();});
   for(const id of ['weights-select','decoder-select','device-select'])$('#'+id).addEventListener('change',()=>{updateReady();updateComputeNote();saveDraft();});
   for(const id of ['normalize','streaming','reference-prompt','max-tokens','temperature','top-k','top-p','min-p','seed','repetition-penalty','repetition-window','token-run-penalty','token-run-grace','chunk-chars','chunk-min-chars','chunk-gap','emotion-mode','reference-text','scene-gap','loop-protection'])$('#'+id).addEventListener('change',saveDraft);
   $('#speed').addEventListener('input',()=>{$('#speed-display').textContent=Number($('#speed').value).toFixed(2)+'×';saveDraft();});

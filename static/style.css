@@ -208,3 +208,18 @@
 [data-theme="dark"] .edit-inline-field .button,[data-theme="dark"] .edit-direction-actions .button{background:#262936;color:#d6dff4;border-color:#3c4153}
 [data-theme="dark"] .edit-inline-field .button:hover,[data-theme="dark"] .edit-direction-actions .button:hover{background:#30364a}
 @media(max-width:620px){.edit-direction-controls{grid-template-columns:minmax(0,1fr)}.edit-direction-head{flex-wrap:wrap}.edit-direction-panel{padding:12px}.edit-direction-actions{gap:9px}}
+
+/* v2.9: accessible dark voice cards (previously hard-coded white on white-text theme). */
+[data-theme="dark"] .voice-card{background:#1d2028;color:#f1f3f9;border:1px solid #343846;min-height:72px}
+[data-theme="dark"] .voice-card strong{color:#f1f3f9;font-weight:650}
+[data-theme="dark"] .voice-card small{color:#a7adbb}
+[data-theme="dark"] .voice-card .voice-avatar{background:#292d37;color:#e1e5f1}
+[data-theme="dark"] .voice-card .selected-mark{color:#91b5ff}
+[data-theme="dark"] .voice-card:hover{background:#252b38;border-color:#576785}
+[data-theme="dark"] .voice-card.selected{background:#1e3153;border-color:#5487ef}
+[data-theme="dark"] .voice-card:focus-visible{outline:2px solid #6094f5;outline-offset:2px}
+[data-theme="dark"] .voice-card.selected strong,[data-theme="dark"] .voice-card.selected small{color:#e7efff}
+.voice-model-filter{display:flex;gap:9px;align-items:center;font-size:12px;color:var(--muted);white-space:nowrap}
+.voice-model-filter select{width:min(250px,35vw)}
+[data-theme="dark"] .voice-model-filter{color:#a5adbe}
+@media(max-width:750px){.voice-model-filter{width:100%}.voice-model-filter select{width:100%;flex:1}}
