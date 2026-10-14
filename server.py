@@ -911,11 +911,13 @@ class StudioEngine:
                 "ready": model is not None, "offline": os.getenv("HF_HUB_OFFLINE", "0").lower() in ("1", "true", "yes"),
                 "environment": str(Path(__file__).parent / ".venv"),
                 "authenticated": False, "compute": compute_capabilities()}
-        try:
-            from huggingface_hub import get_token
-            data["authenticated"] = bool(get_token())
-        except Exception:
-            pass
+        data["authenticated"] = bool(os.getenv("HF_TOKEN"))
+        if not data["authenticated"]:
+            try:
+                from huggingface_hub import get_token
+                data["authenticated"] = bool(get_token())
+            except Exception:
+                pass
         if model is not None:
             data.update({"voices": list(getattr(model, "available_voices", [])),
                          "sample_rate": int(getattr(model, "sample_rate", 24000)),
