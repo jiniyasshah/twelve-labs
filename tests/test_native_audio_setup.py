@@ -17,6 +17,7 @@ class NativeAudioTests(unittest.TestCase):
         self.assertEqual(found["cuda_build"], "12.8")
         self.assertIn("missing DLL", found["torchaudio_error"])
 
+    @unittest.skipIf(sys.platform == "darwin", "No CUDA TorchAudio wheel channel on macOS")
     def test_repair_reinstalls_torchaudio_only(self):
         before = {"torch": "2.11.0+cu128", "cuda_build": "12.8", "torchaudio_error": "missing DLL"}
         after = {"torch": "2.11.0+cu128", "cuda_build": "12.8", "torchaudio": "2.11.0+cu128"}
@@ -56,7 +57,9 @@ class NativeAudioTests(unittest.TestCase):
         args = runner.call_args.args
         self.assertIn("torch==2.11.0", args)
         self.assertIn("torchaudio==2.11.0", args)
-        self.assertIn("https://download.pytorch.org/whl/cpu", args)
+        index = ("https://pypi.org/simple" if sys.platform == "darwin"
+                 else "https://download.pytorch.org/whl/cpu")
+        self.assertIn(index, args)
         self.assertNotIn("torchaudio==2.14.1", args)
 
     @unittest.skipIf(sys.platform == "darwin", "NVIDIA CUDA is unavailable on macOS")
