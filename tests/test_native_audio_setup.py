@@ -22,6 +22,7 @@ class NativeAudioTests(unittest.TestCase):
         after = {"torch": "2.11.0+cu128", "cuda_build": "12.8", "torchaudio": "2.11.0+cu128"}
         with patch.object(studio, "INDIC_PYTHON", pathlib.Path(sys.executable)), \
              patch.object(studio, "runtime_probe", side_effect=[before, after]), \
+             patch.object(studio, "ensure_env"), \
              patch.object(studio, "run") as runner:
             studio.repair_indic_audio()
         self.assertEqual(runner.call_count, 1)
@@ -36,6 +37,7 @@ class NativeAudioTests(unittest.TestCase):
              patch.object(studio, "runtime_probe", return_value={
                  "torch": "2.11.0+cu128", "torchaudio": "2.11.0+cu128",
                  "cuda_build": "12.8", "cuda_available": False}), \
+             patch.object(studio, "ensure_env"), \
              patch.object(studio, "run") as runner:
             studio.install_gpu(studio.INDIC_PYTHON)
         runner.assert_not_called()
@@ -47,6 +49,7 @@ class NativeAudioTests(unittest.TestCase):
                  "cuda_build": None}
         with patch.object(studio, "INDIC_PYTHON", pathlib.Path(sys.executable)), \
              patch.object(studio, "runtime_probe", side_effect=[before, after]), \
+             patch.object(studio, "ensure_env"), \
              patch.object(studio, "run") as runner:
             studio.repair_indic_audio()
         self.assertEqual(runner.call_count, 1)
