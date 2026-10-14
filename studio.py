@@ -129,14 +129,14 @@ def _indic_pair_healthy(details, cuda):
         return details.get('cuda_build') == '12.8'
     return not details.get('cuda_build')
 
-def ensure_indic_pair(cuda=False):
+def ensure_indic_pair(cuda=False, current=None):
     """Repair only the isolated Indic runtime using a published matching pair.
 
     The compatible TorchAudio release may lag behind arbitrary PyPI torch
     versions. Never attempt to install torchaudio==<arbitrary torch version>.
     """
     ensure_env(INDIC_ENV)
-    details = runtime_probe(INDIC_PYTHON)
+    details = current if current is not None else runtime_probe(INDIC_PYTHON)
     if _indic_pair_healthy(details, cuda):
         print('Indic PyTorch and TorchAudio are compatible; no download needed.')
         return
@@ -179,7 +179,7 @@ def repair_indic_audio(cuda=None):
     details = runtime_probe(INDIC_PYTHON)
     if cuda is None:
         cuda = bool(details.get('cuda_build')) and sys.platform != 'darwin'
-    ensure_indic_pair(cuda=cuda)
+    ensure_indic_pair(cuda=cuda, current=details)
 
 def indic_imports_ok():
     return imports_ok(INDIC_PYTHON, 'import torch, torchaudio; from parler_tts import ParlerTTSForConditionalGeneration')
