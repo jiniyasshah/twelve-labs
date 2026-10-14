@@ -206,7 +206,7 @@ function showResult(id){
 }
 async function loadInfo(){
   const result=await api('/api/info');state.info=result;
-  if(!$('#model-select').options.length){$('#model-select').innerHTML=Object.entries(result.models).map(([id,v])=>`<option value="${esc(id)}">${esc(v.label)}</option>`).join('');}
+  if(!$('#model-select').options.length){$('#model-select').innerHTML=Object.entries(result.models).map(([id,v])=>`<option value="${esc(id)}">${esc(v.label)}</option>`).join('');$('#model-select').value='KittenML/kitten-tts-2';}
   if(state.savedModel&&result.models[state.savedModel])$('#model-select').value=state.savedModel;
   state.savedModel=null;
   if(!result.models[$('#model-select').value])$('#model-select').value='KittenML/kitten-tts-2';
