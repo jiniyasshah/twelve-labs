@@ -55,6 +55,13 @@ class ModelGuidanceTests(unittest.TestCase):
         self.assertIn('chatterbox-tts', text)
         self.assertIn('CLONE_PYTHON', text)
         self.assertIn('"clone"', text)
+        self.assertNotEqual(studio.NEPALI_ENV, studio.CLONE_ENV)
+        self.assertIn('git+https://github.com/Firojpaudel/chatterbox_nepali.git', text)
+        self.assertIn('nepali-constraints.txt', text)
+        constraints = (pathlib.Path(__file__).parents[1] / "nepali-constraints.txt").read_text()
+        self.assertIn("torch==2.11.0", constraints)
+        self.assertIn("torchaudio==2.11.0", constraints)
+        self.assertIn("torchvision==0.26.0", constraints)
 
     def test_clone_requires_reference_preflight(self):
         with self.assertRaisesRegex(ValueError, "reference"):
