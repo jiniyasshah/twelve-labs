@@ -12,7 +12,7 @@ On Windows you can also run `py studio.py`. The single entry point creates its o
 
 Optional commands, using that same file:
 
-    python studio.py --setup --extras kokoro,indic,clone,alignment
+    python studio.py --setup --extras kokoro,indic,clone,nepali,alignment
     python studio.py --setup --gpu
     python studio.py --setup --repair
     python studio.py --offline
@@ -54,9 +54,9 @@ If your older `.venv-indic` has PyTorch 2.14.1, no published TorchAudio 2.14.1 w
 
 ## Multilingual voice cloning (optional)
 
-Run the **single** installer with `python studio.py --setup --extras clone`. This creates `.venv-clone`, a separate Python environment for upstream Chatterbox and its pinned Torch dependencies; it does not change KittenTTS or Indic Parler. Choose **Chatterbox Multilingual** in Speech > Model, select the **Clone a voice** tab, upload or select a recording you have the rights to use, pick the target speech language, and generate. The voice reference is saved locally and may also be used for sentence-level replacements. No voice training is required.
+Run the **single** installer with `python studio.py --setup --extras clone,nepali`. This creates `.venv-clone` for upstream Chatterbox and `.venv-nepali` for the community Nepali fork, separately from KittenTTS and Indic Parler. You can install only `clone` or only `nepali` if you don't need both. Choose **Chatterbox Multilingual** in Speech > Model, select the **Clone a voice** tab, upload or select a recording you have the rights to use, pick the target speech language, and generate. The voice reference is saved locally and may also be used for sentence-level replacements. No voice training is required.
 
-The official [Chatterbox Multilingual](https://github.com/resemble-ai/chatterbox) model supports **23 languages** (including Hindi); it **does not natively support Nepali**. For Nepali select **Chatterbox Nepali · Experimental cloning**, which loads an open community checkpoint from [Firoj112/chatterbox-nepali-runs](https://huggingface.co/Firoj112/chatterbox-nepali-runs). The community checkpoint is not verified to match the official multilingual model's production reliability, and its quality may vary. It may download significant weights on first use.
+The official [Chatterbox Multilingual](https://github.com/resemble-ai/chatterbox) model supports **23 languages** (including Hindi); it **does not natively support Nepali**. For Nepali select **Chatterbox Nepali · Experimental cloning**, which uses the [community-patched Nepali implementation](https://github.com/Firojpaudel/chatterbox_nepali) and loads its published checkpoint from [Firoj112/chatterbox-nepali-runs](https://huggingface.co/Firoj112/chatterbox-nepali-runs). The Nepali fork needs its own patched tokenizer/language table (the official engine rejects `ne`). Its separate environment uses a pinned published Torch/TorchAudio/TorchVision trio. Quality and full generation are not verified on your GPU. It may download significant weights on first use.
 
 A compatible CUDA driver alone does not mean Chatterbox's pinned PyTorch will accelerate on recent RTX GPUs. The installer intentionally preserves the upstream isolated dependencies rather than silently installing incompatible Torch/TorchAudio binaries. Voice cloning may initially run on CPU on some GPUs. This is different from the main KittenTTS CUDA environment.
 
