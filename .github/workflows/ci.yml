@@ -109,3 +109,32 @@ jobs:
           .\.venv-clone\Scripts\python.exe -m pip check
       - name: Verify isolated installer diagnostics
         run: python studio.py --diagnose
+
+  windows-nepali-language-patch:
+    name: Windows Nepali fork tokenizer and native imports
+    runs-on: windows-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Create isolated community engine environment
+        shell: pwsh
+        run: |
+          python -m venv .venv-nepali
+          .\.venv-nepali\Scripts\python.exe -m pip install --upgrade pip
+      - name: Install pinned CPU Torch trio for Nepali
+        shell: pwsh
+        run: |
+          .\.venv-nepali\Scripts\python.exe -m pip install "torch==2.11.0" "torchaudio==2.11.0" "torchvision==0.26.0" --index-url https://download.pytorch.org/whl/cpu
+      - name: Install community fork with version constraints
+        shell: pwsh
+        run: |
+          .\.venv-nepali\Scripts\python.exe -m pip install -c nepali-constraints.txt git+https://github.com/Firojpaudel/chatterbox_nepali.git soundfile
+      - name: Check patched Nepali language model and native audio
+        shell: pwsh
+        run: |
+          .\.venv-nepali\Scripts\python.exe -c "import torch, torchaudio, torchvision; from chatterbox.mtl_tts import ChatterboxMultilingualTTS, SUPPORTED_LANGUAGES; assert 'ne' in SUPPORTED_LANGUAGES; print('Nepali language patched:', SUPPORTED_LANGUAGES['ne'])"
+          .\.venv-nepali\Scripts\python.exe -m pip check
