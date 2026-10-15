@@ -82,3 +82,30 @@ jobs:
           .\.venv-indic\Scripts\python.exe -m pip check
       - name: Run Studio's two-environment diagnostics
         run: python studio.py --diagnose
+
+  windows-chatterbox-native:
+    name: Windows Chatterbox native dependencies and class import
+    runs-on: windows-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Prepare isolated clone environment
+        shell: pwsh
+        run: |
+          python -m venv .venv-clone
+          .\\.venv-clone\\Scripts\\python.exe -m pip install --upgrade pip
+      - name: Install official Chatterbox engine into isolated Python
+        shell: pwsh
+        run: |
+          .\\.venv-clone\\Scripts\\python.exe -m pip install chatterbox-tts soundfile
+      - name: Native TorchAudio and Chatterbox class import
+        shell: pwsh
+        run: |
+          .\\.venv-clone\\Scripts\\python.exe -c "import torch, torchaudio, soundfile; from chatterbox.mtl_tts import ChatterboxMultilingualTTS; print('Clone native imports OK:', torch.__version__, torchaudio.__version__)"
+          .\\.venv-clone\\Scripts\\python.exe -m pip check
+      - name: Verify isolated installer diagnostics
+        run: python studio.py --diagnose
