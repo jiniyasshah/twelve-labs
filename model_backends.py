@@ -107,3 +107,92 @@ class IndicParlerEngine:
 
     def __del__(self):
         self.close()
+
+
+# Upstream Chatterbox Multilingual supports 23 languages, including Hindi.
+# Nepali is enabled only by an explicitly selected community fine-tune.
+CLONE_LANGUAGES = {
+    'ar':'Arabic', 'da':'Danish', 'de':'German', 'el':'Greek',
+    'en':'English', 'es':'Spanish', 'fi':'Finnish', 'fr':'French',
+    'he':'Hebrew', 'hi':'Hindi', 'it':'Italian', 'ja':'Japanese',
+    'ko':'Korean', 'ms':'Malay', 'nl':'Dutch', 'no':'Norwegian',
+    'pl':'Polish', 'pt':'Portuguese', 'ru':'Russian', 'sv':'Swedish',
+    'sw':'Swahili', 'tr':'Turkish', 'zh':'Chinese',
+}
+
+class ChatterboxEngine:
+    """Reference-audio multilingual cloning in a dependency-isolated worker."""
+    def __init__(self, device="cpu", nepali=False):
+        import json
+        import os
+        import pathlib
+        import subprocess
+        self._json = json
+        self.nepali = nepali
+        self.device = device
+        self.available_voices = ["Nepali default"] if nepali else ["Multilingual default"]
+        root = pathlib.Path(__file__).resolve().parent
+        folder = ".venv-nepali" if nepali else ".venv-clone"
+        exe = root / folder / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        if not exe.is_file():
+            extra = "nepali" if nepali else "clone"
+            raise RuntimeError(f"Chatterbox {extra} is not installed. Run: python studio.py --setup --extras {extra}")
+        self.process = subprocess.Popen(
+            [str(exe), "-u", str(root / "clone_worker.py"), device, "nepali" if nepali else "multilingual"],
+            cwd=root, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=None, encoding="utf-8", errors="replace", bufsize=1)
+        response = self._receive()
+        if response.get("error"):
+            self.close()
+            raise RuntimeError(response["error"])
+        self.sample_rate = int(response["sample_rate"])
+        self.device = response.get("device", device)
+
+    def _receive(self):
+        line = self.process.stdout.readline()
+        if not line:
+            raise RuntimeError("Chatterbox worker exited. Inspect terminal output for the cause.")
+        try:
+            return self._json.loads(line)
+        except ValueError as exc:
+            raise RuntimeError("Chatterbox worker sent invalid output.") from exc
+
+    def generate(self, text, voice="Multilingual default", reference=None, language=None, **_):
+        import pathlib
+        import soundfile as sf
+        import tempfile
+        supported = {"ne"} if self.nepali else set(CLONE_LANGUAGES)
+        language = language or ("ne" if self.nepali else "en")
+        if language not in supported:
+            raise ValueError("Unsupported cloning language. Choose a model that supports the language.")
+        if voice not in self.available_voices and voice != "Multilingual default" and voice != "Nepali default":
+            raise ValueError("Unknown Chatterbox voice")
+        if self.process.poll() is not None:
+            raise RuntimeError("Chatterbox worker stopped; reload the model.")
+        if reference and not pathlib.Path(reference).is_file():
+            raise ValueError("Voice reference is missing.")
+        with tempfile.TemporaryDirectory(prefix="kitten-clone-") as tmp:
+            output = str(pathlib.Path(tmp) / "result.wav")
+            data = {"text": text, "language": language,
+                    "reference": str(reference) if reference else None, "output": output}
+            self.process.stdin.write(self._json.dumps(data, ensure_ascii=False) + "\n")
+            self.process.stdin.flush()
+            result = self._receive()
+            if result.get("error"):
+                raise RuntimeError(result["error"])
+            waveform, rate = sf.read(output, dtype="float32")
+            if int(rate) != self.sample_rate:
+                raise RuntimeError("Cloning worker sample rate mismatch")
+            return np.asarray(waveform, dtype=np.float32).reshape(-1)
+
+    def close(self):
+        proc = getattr(self, "process", None)
+        if proc is not None and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except Exception:
+                proc.kill()
+
+    def __del__(self):
+        self.close()

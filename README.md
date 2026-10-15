@@ -12,7 +12,7 @@ On Windows you can also run `py studio.py`. The single entry point creates its o
 
 Optional commands, using that same file:
 
-    python studio.py --setup --extras kokoro,indic,alignment
+    python studio.py --setup --extras kokoro,indic,clone,nepali,alignment
     python studio.py --setup --gpu
     python studio.py --setup --repair
     python studio.py --offline
@@ -27,6 +27,8 @@ Optional commands, using that same file:
 | KittenTTS 2 | English, Hindi and other bundled voices | Voice cloning and expression tags | Follow model license |
 | Kokoro 82M | English, Hindi | Small, fast, several voices; no cloning | Apache 2.0 |
 | Indic Parler-TTS | Hindi, Nepali, English and others | Named speakers, optional description prompt; no Kitten tag syntax | Apache 2.0, gated downloads |
+| Chatterbox Multilingual | 23 incl. Hindi | Zero-shot reference voice cloning | MIT |
+| Community Chatterbox Nepali | Nepali (experimental) | Reference voice cloning, community fine-tune | See model card |
 | Legacy Kitten ONNX | English | Very small and CPU friendly | Follow model license |
 
 **Indic Parler model access:** First accept terms at https://huggingface.co/ai4bharat/indic-parler-tts, then set `HF_TOKEN` in your environment or copy `.env.example` to `.env`. Never commit credentials. The weights are several GB and are downloaded only when selected. Indic Parler is installed in its own `.venv-indic` and runs in a persistent subprocess because it requires an older Transformers version incompatible with KittenTTS. The separate environment consumes additional disk space.
@@ -49,3 +51,17 @@ If the Indic worker reports `Could not load this library: ...libtorchaudio.pyd`,
 Every pull request and push to main runs Python API, editor, installer, and JavaScript regression tests with Python 3.12 on **Windows, Linux, and macOS**. A separate Windows job installs the actual PyTorch 2.11.0 / TorchAudio 2.11.0 CPU wheel pair, imports the native TorchAudio DLL, installs the open-source Parler Python package, and imports its model class. Tests do not download gated speech model weights or perform full audio inference.
 
 If your older `.venv-indic` has PyTorch 2.14.1, no published TorchAudio 2.14.1 wheel is available from the index shown in your install log. The new installer will replace both incompatible wheels with the supported 2.11.0 pair **inside .venv-indic only**, leaving KittenTTS and existing recordings untouched. Use `python studio.py --setup --repair-indic-audio` (CPU) or `python studio.py --setup --repair-indic-audio --gpu` (NVIDIA CUDA 12.8). This correction requires a one-time PyTorch download when versions do not match.
+
+## Multilingual voice cloning (optional)
+
+Run the **single** installer with `python studio.py --setup --extras clone,nepali`. This creates `.venv-clone` for upstream Chatterbox and `.venv-nepali` for the community Nepali fork, separately from KittenTTS and Indic Parler. You can install only `clone` or only `nepali` if you don't need both. Choose **Chatterbox Multilingual** in Speech > Model, select the **Clone a voice** tab, upload or select a recording you have the rights to use, pick the target speech language, and generate. The voice reference is saved locally and may also be used for sentence-level replacements. No voice training is required.
+
+The official [Chatterbox Multilingual](https://github.com/resemble-ai/chatterbox) model supports **23 languages** (including Hindi); it **does not natively support Nepali**. For Nepali select **Chatterbox Nepali · Experimental cloning**, which uses the [community-patched Nepali implementation](https://github.com/Firojpaudel/chatterbox_nepali) and loads its published checkpoint from [Firoj112/chatterbox-nepali-runs](https://huggingface.co/Firoj112/chatterbox-nepali-runs). The Nepali fork needs its own patched tokenizer/language table (the official engine rejects `ne`). Its separate environment uses a pinned published Torch/TorchAudio/TorchVision trio. Quality and full generation are not verified on your GPU. It may download significant weights on first use.
+
+A compatible CUDA driver alone does not mean Chatterbox's pinned PyTorch will accelerate on recent RTX GPUs. The installer intentionally preserves the upstream isolated dependencies rather than silently installing incompatible Torch/TorchAudio binaries. Voice cloning may initially run on CPU on some GPUs. This is different from the main KittenTTS CUDA environment.
+
+**Important:** Kokoro and Indic Parler do not offer arbitrary speaker cloning in this Studio integration. The app therefore keeps those voices as built-in speakers rather than pretending to clone them; select a clone-capable model for reference voice work.
+
+### Actionable model errors
+
+When a model returns Hugging Face `403 / gated repo`, the job panel shows **Model access required** and provides the model's approved Hugging Face page. Request or accept the access conditions while signed into the account used for your `HF_TOKEN`; approval may require waiting. The model will not work until permissions are granted. Credentials are never included in job errors or returned URLs. Native audio errors instead point to local diagnostics and repair. This behavior also applies to any clone-capable model that has an explicitly configured access page.
