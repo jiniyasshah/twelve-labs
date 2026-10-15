@@ -97,15 +97,15 @@ jobs:
         shell: pwsh
         run: |
           python -m venv .venv-clone
-          .\\.venv-clone\\Scripts\\python.exe -m pip install --upgrade pip
+          .\.venv-clone\Scripts\python.exe -m pip install --upgrade pip
       - name: Install official Chatterbox engine into isolated Python
         shell: pwsh
         run: |
-          .\\.venv-clone\\Scripts\\python.exe -m pip install chatterbox-tts soundfile
+          .\.venv-clone\Scripts\python.exe -m pip install chatterbox-tts soundfile
       - name: Native TorchAudio and Chatterbox class import
         shell: pwsh
         run: |
-          .\\.venv-clone\\Scripts\\python.exe -c "import torch, torchaudio, soundfile; from chatterbox.mtl_tts import ChatterboxMultilingualTTS; print('Clone native imports OK:', torch.__version__, torchaudio.__version__)"
-          .\\.venv-clone\\Scripts\\python.exe -m pip check
+          .\.venv-clone\Scripts\python.exe -c "import torch, torchaudio, soundfile; from chatterbox.mtl_tts import ChatterboxMultilingualTTS; print('Clone native imports OK:', torch.__version__, torchaudio.__version__)"
+          .\.venv-clone\Scripts\python.exe -m pip check
       - name: Verify isolated installer diagnostics
         run: python studio.py --diagnose
