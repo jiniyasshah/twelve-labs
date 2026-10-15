@@ -105,7 +105,12 @@ function renderModel(){
   const v2=isV2(); $('#v2-model-options').hidden=!v2;$('#v2-generation-options').hidden=!v2;
   const family=state.info?.models?.[$('#model-select').value]?.family;
   $('#onnx-options').hidden=family!=='onnx';$('#indic-options').hidden=family!=='indic';$('#clone-options').hidden=!isChatterbox();$('#advanced-panel').hidden=!v2;
-  if(family==='nepali_clone')$('#clone-language').value='ne';
+  const language=$('#clone-language');
+  for(const option of language.options){
+    option.disabled=family==='nepali_clone' ? option.value!=='ne' : option.value==='ne';
+  }
+  if(family==='nepali_clone')language.value='ne';
+  else if(family==='chatterbox' && language.value==='ne')language.value='hi';
   const model=$('#model-select').value;$('#model-description').textContent=state.info?.models?.[model]?.size||'';
   const voiceModel=$('#voice-model-select');if(voiceModel){voiceModel.innerHTML=$('#model-select').innerHTML;voiceModel.value=model;}
   const onnxCuda=$('#device-select option[value="cuda"]');onnxCuda.textContent=family==='onnx'?'CUDA (requires ONNX GPU runtime)':'NVIDIA CUDA';
