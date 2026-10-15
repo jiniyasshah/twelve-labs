@@ -132,9 +132,11 @@ class ChatterboxEngine:
         self.device = device
         self.available_voices = ["Nepali default"] if nepali else ["Multilingual default"]
         root = pathlib.Path(__file__).resolve().parent
-        exe = root / ".venv-clone" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        folder = ".venv-nepali" if nepali else ".venv-clone"
+        exe = root / folder / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         if not exe.is_file():
-            raise RuntimeError("Chatterbox is not installed. Run: python studio.py --setup --extras clone")
+            extra = "nepali" if nepali else "clone"
+            raise RuntimeError(f"Chatterbox {extra} is not installed. Run: python studio.py --setup --extras {extra}")
         self.process = subprocess.Popen(
             [str(exe), "-u", str(root / "clone_worker.py"), device, "nepali" if nepali else "multilingual"],
             cwd=root, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
