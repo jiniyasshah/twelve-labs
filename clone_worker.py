@@ -21,6 +21,17 @@ def main():
             from chatterbox.mtl_tts import ChatterboxMultilingualTTS
             wanted = sys.argv[1] if len(sys.argv) > 1 else "cpu"
             device = "cuda" if wanted == "cuda" and torch.cuda.is_available() else "cpu"
+            # Upstream Chatterbox pins torch 2.6, which predates NVIDIA RTX 50
+            # Blackwell kernels. Avoid selecting unsupported CUDA accidentally.
+            if device == "cuda":
+                try:
+                    major, _ = torch.cuda.get_device_capability()
+                    torch_version = tuple(int(x) for x in torch.__version__.split("+")[0].split(".")[:2])
+                    if major >= 12 and torch_version < (2, 7):
+                        print("Chatterbox's pinned PyTorch does not support RTX 50 CUDA kernels; using CPU.", file=sys.stderr)
+                        device = "cpu"
+                except Exception:
+                    device = "cpu"
             # For upstream, V3 is the latest multilingual T3 checkpoint.
             # Community Nepali weights fine-tune the original V2 backbone.
             model = (ChatterboxMultilingualTTS.from_pretrained(device=device)
