@@ -4,7 +4,9 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const EXTRA_VOICES = {
   'hexgrad/Kokoro-82M':['af_heart','af_bella','af_nicole','am_adam','am_michael','bf_emma','bm_george','hf_alpha','hf_beta','hm_omega','hm_psi'],
-  'ai4bharat/indic-parler-tts':['Hindi · Rohit','Hindi · Divya','Hindi · Aman','Hindi · Rani','Nepali · Amrita','English · Mary','English · Thoma']
+  'ai4bharat/indic-parler-tts':['Hindi · Rohit','Hindi · Divya','Hindi · Aman','Hindi · Rani','Nepali · Amrita','English · Mary','English · Thoma'],
+  'ResembleAI/chatterbox':['Multilingual default'],
+  'Firoj112/chatterbox-nepali-runs':['Nepali default']
 };
 const ONNX_VOICES = ['Bella','Jasper','Luna','Bruno','Rosie','Hugo','Kiki','Leo'];
 const KEY = 'kitten-studio-v2-draft';
@@ -46,7 +48,7 @@ function saveDraft() {
   const values={};
   const ids=['speech-text','model-select','device-select','weights-select','decoder-select','normalize','streaming',
     'speed','max-tokens','reference-prompt','temperature','top-k','top-p','min-p','emotion-mode','reference-text',
-    'scene-gap','loop-protection','indic-description', ...Object.keys(ADVANCED)];
+    'scene-gap','loop-protection','indic-description','clone-language', ...Object.keys(ADVANCED)];
   for(const id of ids){const el=$('#'+id);if(el)values[id]=el.type==='checkbox'?el.checked:el.value;}
   try { localStorage.setItem(KEY,JSON.stringify({values,voice:state.voice,preset:state.preset,source:state.source,segments:state.segments,referenceId:state.referenceId,referenceName:state.referenceName})); } catch{}
 }
@@ -66,6 +68,8 @@ function restoreDraft() {
   }catch{}
 }
 function isV2(){return ($('#model-select').value || 'KittenML/kitten-tts-2')==='KittenML/kitten-tts-2';}
+function cloneCapable(){return ['KittenML/kitten-tts-2','ResembleAI/chatterbox','Firoj112/chatterbox-nepali-runs'].includes($('#model-select').value);}
+function isChatterbox(){return ['ResembleAI/chatterbox','Firoj112/chatterbox-nepali-runs'].includes($('#model-select').value);}
 function modelConfig(){return {model:$('#model-select').value,device:$('#device-select').value,weights:$('#weights-select').value,decoder:$('#decoder-select').value};}
 function voices(){
   const model=$('#model-select').value, key=state.info?.engine?.key;
@@ -83,8 +87,8 @@ function refreshVoiceOptions(){
   $('#voice-description').textContent=voiceInfo(state.voice)[0];
 }
 function renderSource(){
-  if(!isV2())state.source='builtin';
-  $$('#source-tabs button').forEach(b=>{b.classList.toggle('active',b.dataset.source===state.source);b.disabled=b.dataset.source==='clone'&&!isV2();});
+  if(!cloneCapable())state.source='builtin';
+  $$('#source-tabs button').forEach(b=>{b.classList.toggle('active',b.dataset.source===state.source);b.disabled=b.dataset.source==='clone'&&!cloneCapable();});
   $('#source-builtin').hidden=state.source!=='builtin';$('#source-clone').hidden=state.source!=='clone';
   $('#upload-title').textContent=state.referenceName||'Select a reference recording';
   const available=state.references.filter(r=>r.available);
@@ -100,7 +104,8 @@ function renderSource(){
 function renderModel(){
   const v2=isV2(); $('#v2-model-options').hidden=!v2;$('#v2-generation-options').hidden=!v2;
   const family=state.info?.models?.[$('#model-select').value]?.family;
-  $('#onnx-options').hidden=family!=='onnx';$('#indic-options').hidden=family!=='indic';$('#advanced-panel').hidden=!v2;
+  $('#onnx-options').hidden=family!=='onnx';$('#indic-options').hidden=family!=='indic';$('#clone-options').hidden=!isChatterbox();$('#advanced-panel').hidden=!v2;
+  if(family==='nepali_clone')$('#clone-language').value='ne';
   const model=$('#model-select').value;$('#model-description').textContent=state.info?.models?.[model]?.size||'';
   const voiceModel=$('#voice-model-select');if(voiceModel){voiceModel.innerHTML=$('#model-select').innerHTML;voiceModel.value=model;}
   const onnxCuda=$('#device-select option[value="cuda"]');onnxCuda.textContent=family==='onnx'?'CUDA (requires ONNX GPU runtime)':'NVIDIA CUDA';
@@ -127,6 +132,7 @@ function selectView(view){
 function configPayload(){
   const payload={...modelConfig(),preset:state.preset,normalize:$('#normalize').checked,streaming:$('#streaming').checked,speed:Number($('#speed').value),loop_protection:$('#loop-protection').value};
   if(state.info?.models?.[payload.model]?.family==='indic')payload.description=$('#indic-description').value.trim();
+  if(isChatterbox())payload.language=payload.model==='Firoj112/chatterbox-nepali-runs'?'ne':$('#clone-language').value;
   if(!isV2())return payload;
   payload.max_new_tokens=Number($('#max-tokens').value)||1000;
   payload.use_reference_prompt=$('#reference-prompt').value;
@@ -140,7 +146,7 @@ function configPayload(){
 }
 function withClone(payload,voice){
   if(voice!=='__clone__')return;
-  if(!isV2())throw new Error('Voice cloning is only available for KittenTTS 2.');
+  if(!cloneCapable())throw new Error('Select KittenTTS 2, Chatterbox Multilingual, or Chatterbox Nepali to clone a voice.');
   if(!state.referenceId || !state.references.some(r=>r.id===state.referenceId && r.available))
     throw new Error('Your saved voice reference is unavailable. Select another recording or upload one.');
   payload.reference_id=state.referenceId;
@@ -157,6 +163,16 @@ function renderJob(job){
   const title=job.status==='error'?'Could not complete request':job.status==='done'?'Finished successfully':job.status==='queued'?'Waiting in queue':job.kind==='load'?'Loading model':'Generating audio';
   $('#job-title').textContent=title;
   $('#job-message').textContent=[job.error||job.message||'',job.warning].filter(Boolean).join('  •  ');
+  const help=$('#job-help');help.hidden=!(job.status==='error'&&job.help);
+  if(!help.hidden){
+    $('#job-help-title').textContent=job.help.title||'Action needed';
+    $('#job-help-message').textContent=job.help.message||'Check the model configuration.';
+    const url=job.help.url;
+    const trusted=typeof url==='string' && /^https:\/\/huggingface\.co\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/.test(url);
+    const link=$('#job-help-link');link.hidden=!trusted;
+    if(trusted){link.href=url;link.textContent=job.help.action||'Open model page';}
+    else link.removeAttribute('href');
+  }
   const benchmark=$('#job-benchmark');benchmark.hidden=!job.timings;
   if(job.timings)benchmark.textContent=formatBenchmark(job.timings);
   const pct=job.status==='done'?100:job.total?Math.round(job.completed/job.total*100):job.status==='running'?12:0;
@@ -179,7 +195,7 @@ async function startJob(path,payload){
         await loadInfo();
         if(job.result_id){state.lastTiming=job.timings||null;state.lastTimedResultId=job.result_id;await loadLibrary();if(payload.segments)selectView('speech');showResult(job.result_id);toast('Your audio is ready.');}
         else toast(job.warning||'Model is ready.',!!job.warning);
-      }else if(job.status==='error'){toast(job.error||'Model generation failed',true);}
+      }else if(job.status==='error'){toast(job.help?'Action needed — see the error panel.':(job.error||'Model generation failed'),true);}
       break;
     }
   }
@@ -221,6 +237,9 @@ function updateComputeNote(){
   const family=state.info?.models?.[$('#model-select').value]?.family||'v2';
   const available=family!=='onnx'?info.torch_cuda:info.onnx_cuda;
   const selection=$('#device-select').value;
+  if(family==='indic'||family==='chatterbox'||family==='nepali_clone'){
+    el.textContent='This engine runs in a separate environment. Its GPU availability is checked when loading; the main Studio GPU indicator may differ.';return;
+  }
   if(available){el.textContent=family==='v2'?'CUDA acceleration is available in PyTorch.':'ONNX CUDA provider is available.';return;}
   if(selection==='cuda'){
     el.textContent=family==='v2'?'CUDA is not available in this PyTorch installation. Studio will use CPU. To enable NVIDIA GPU, run python studio.py --setup --gpu.':'ONNX CUDA provider is unavailable. Studio will use CPU.';
@@ -241,11 +260,11 @@ function renderVoices(){
 }
 function renderSegments(){
   const voiceNames=voices();
-  const choices=voiceNames.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')+(isV2()?'<option value="__clone__">Cloned reference voice</option>':'');
+  const choices=voiceNames.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')+(cloneCapable()?'<option value="__clone__">Cloned reference voice</option>':'');
   $('#scene-list').innerHTML=state.segments.map((s,i)=>`<div class="scene-card" data-index="${i}"><div class="scene-head"><strong>Scene ${String(i+1).padStart(2,'0')}</strong><div class="scene-actions"><button data-action="up" title="Move up" ${i===0?'disabled':''}>↑</button><button data-action="down" title="Move down" ${i===state.segments.length-1?'disabled':''}>↓</button><button data-action="copy" title="Duplicate scene">⧉</button><button data-action="remove" title="Remove scene">×</button></div></div><textarea class="scene-body" placeholder="What should the speaker say?">${esc(s.text)}</textarea><div class="scene-tag-tools"><button type="button" data-tag-type="emotion">＋ Emotion</button><button type="button" data-tag-type="event">＋ Event</button><button type="button" data-tag-type="emphasis">Emphasis</button><button type="button" class="scene-auto" data-tag-type="auto" ${isV2()?'':'disabled title="Requires KittenTTS 2"'}>✦ Auto-direct</button></div><div class="scene-foot"><select class="field-select scene-voice" aria-label="Scene ${i+1} voice">${choices}</select><span class="helper scene-count">${s.text.length} characters</span></div></div>`).join('');
   $$('.scene-card').forEach((element,i)=>{
     const item=state.segments[i],select=$('.scene-voice',element);
-    select.value=voiceNames.includes(item.voice)||item.voice==='__clone__'&&isV2()?item.voice:(voiceNames.includes('Bruno')?'Bruno':voiceNames[0]);item.voice=select.value;
+    select.value=voiceNames.includes(item.voice)||item.voice==='__clone__'&&cloneCapable()?item.voice:(voiceNames.includes('Bruno')?'Bruno':voiceNames[0]);item.voice=select.value;
     select.addEventListener('change',()=>{item.voice=select.value;saveDraft();});
     const textarea=$('.scene-body',element);
     textarea.addEventListener('input',e=>{item.text=e.target.value;$('.scene-count',element).textContent=item.text.length+' characters';updateSceneSummary();saveDraft();});
