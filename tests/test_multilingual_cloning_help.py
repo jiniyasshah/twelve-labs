@@ -87,3 +87,25 @@ class ModelGuidanceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_gated_repo_job_api_returns_actionable_help(monkeypatch):
+    """Actual /api/load polling surfaces an access page, not just a raw traceback."""
+    from fastapi.testclient import TestClient
+
+    def denied(**kwargs):
+        raise RuntimeError("403 Client Error. Gated repo: "
+                           "you are not in the authorized list for ai4bharat/indic-parler-tts.")
+    monkeypatch.setattr(server, "IndicParlerEngine", denied)
+    monkeypatch.setattr(server.engine, "model", None)
+    monkeypatch.setattr(server.engine, "current_key", None)
+    with TestClient(server.app) as client:
+        r = client.post("/api/load", json={"model":"ai4bharat/indic-parler-tts", "device":"cpu"})
+        assert r.status_code == 200
+        job_id = r.json()["job_id"]
+        server.engine.futures[job_id].result(timeout=10)
+        payload = client.get("/api/jobs/" + job_id).json()
+    assert payload["status"] == "error"
+    assert payload["help"]["code"] == "model_access"
+    assert payload["help"]["url"] == "https://huggingface.co/ai4bharat/indic-parler-tts"
+    assert "Request ID:" not in payload["error"]
