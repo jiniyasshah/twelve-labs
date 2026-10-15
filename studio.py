@@ -12,12 +12,14 @@ import venv
 ROOT = pathlib.Path(__file__).resolve().parent
 ENV = ROOT / ".venv"
 INDIC_ENV = ROOT / ".venv-indic"
+CLONE_ENV = ROOT / ".venv-clone"
 
 def python_in(folder):
     return folder / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 
 PYTHON = python_in(ENV)
 INDIC_PYTHON = python_in(INDIC_ENV)
+CLONE_PYTHON = python_in(CLONE_ENV)
 # Official TorchAudio wheels are published in lockstep with PyTorch.
 INDIC_TORCH_VERSION = "2.11.0"
 CUDA_WHEEL_CHANNEL = "cu128"
@@ -97,7 +99,9 @@ def runtime_probe(python):
         return {'error': str(exc)}
 
 def diagnose():
-    for name, python in [('Main KittenTTS', PYTHON), ('Isolated Indic Parler', INDIC_PYTHON)]:
+    for name, python in [('Main KittenTTS', PYTHON),
+                         ('Isolated Indic Parler', INDIC_PYTHON),
+                         ('Isolated Chatterbox', CLONE_PYTHON)]:
         d = runtime_probe(python)
         print(f'\n{name}: {python}', flush=True)
         if 'error' in d:
@@ -184,8 +188,28 @@ def repair_indic_audio(cuda=None):
 def indic_imports_ok():
     return imports_ok(INDIC_PYTHON, 'import torch, torchaudio; from parler_tts import ParlerTTSForConditionalGeneration')
 
+def install_clone():
+    """Chatterbox requires torch 2.6 and other older packages: keep isolated."""
+    ensure_env(CLONE_ENV)
+    probe = runtime_probe(CLONE_PYTHON)
+    installed = imports_ok(CLONE_PYTHON,
+        'import torch, torchaudio, soundfile; from chatterbox.mtl_tts import ChatterboxMultilingualTTS')
+    if installed:
+        print('Chatterbox installed in .venv-clone; skipping download.')
+        return
+    print('Installing Chatterbox multilingual cloning in .venv-clone...', flush=True)
+    # Upstream chatterbox-tts locks matching PyTorch/TorchAudio versions.
+    # Never let them downgrade the main Studio or Indic environments.
+    run(CLONE_PYTHON, '-m', 'pip', 'install', 'chatterbox-tts', 'soundfile')
+    if not imports_ok(CLONE_PYTHON,
+        'import torch, torchaudio, soundfile; from chatterbox.mtl_tts import ChatterboxMultilingualTTS'):
+        raise RuntimeError('Chatterbox native audio imports failed. Run python studio.py --diagnose.')
+    print('Chatterbox dependency imports passed. Model weights download only when selected.')
+
 def install_extra(name, gpu=False):
-    if name == "kokoro":
+    if name == "clone":
+        install_clone()
+    elif name == "kokoro":
         run(PYTHON, "-m", "pip", "install", "kokoro>=0.9.2", "misaki[en]", "espeakng-loader")
     elif name == "alignment":
         run(PYTHON, "-m", "pip", "install", "faster-whisper")
@@ -236,7 +260,7 @@ def main():
     p = argparse.ArgumentParser(description="Setup and launch Kitten Studio")
     p.add_argument("--setup", action="store_true", help="Install/repair without launching")
     p.add_argument("--repair", action="store_true", help="Restore KittenTTS after old Parler installation")
-    p.add_argument("--extras", default="", help="Optional: kokoro,indic,alignment")
+    p.add_argument("--extras", default="", help="Optional: kokoro,indic,clone,alignment")
     p.add_argument("--gpu", action="store_true", help="Install CUDA wheels only when missing")
     p.add_argument("--diagnose", action="store_true", help="Check both environments and native audio DLLs")
     p.add_argument("--repair-indic-audio", action="store_true",
@@ -263,6 +287,10 @@ def main():
         install_gpu(PYTHON)
         if INDIC_PYTHON.exists():
             install_gpu(INDIC_PYTHON)
+        if CLONE_PYTHON.exists():
+            print('Chatterbox uses the model author\'s pinned Torch/TorchAudio in .venv-clone; '
+                  'GPU support on newer NVIDIA cards requires separate compatibility testing. '
+                  'Not changing Chatterbox dependencies automatically.')
     if args.setup and INDIC_PYTHON.exists():
         info = runtime_probe(INDIC_PYTHON)
         if info.get('torchaudio_error') or not info.get('torchaudio'):
