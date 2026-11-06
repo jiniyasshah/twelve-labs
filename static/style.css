@@ -223,3 +223,11 @@
 .voice-model-filter select{width:min(250px,35vw)}
 [data-theme="dark"] .voice-model-filter{color:#a5adbe}
 @media(max-width:750px){.voice-model-filter{width:100%}.voice-model-filter select{width:100%;flex:1}}
+
+/* Actionable model errors: persistent guidance instead of a disappearing toast. */
+.job-help{margin-top:10px;padding:12px 14px;border:1px solid var(--line,#50586a);border-radius:12px;background:rgba(95,115,146,.11)}
+.job-help strong{display:block;font-size:13px;color:var(--text,#eee)}
+.job-help p{margin:5px 0 9px;font-size:12px;line-height:1.5;color:var(--muted,#aab)}
+.job-help-link{font-size:12px;font-weight:700;color:#8eb5ff;text-decoration:underline;text-underline-offset:3px}
+.job-help-link:hover{color:#bdd4ff}
+.job-help[hidden],.job-help-link[hidden]{display:none!important}

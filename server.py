@@ -31,7 +31,8 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from model_backends import KokoroEngine, IndicParlerEngine, KOKORO_VOICES, INDIC_VOICES
+from model_backends import (KokoroEngine, IndicParlerEngine, ChatterboxEngine,
+                            KOKORO_VOICES, INDIC_VOICES, CLONE_LANGUAGES)
 
 import numpy as np
 import soundfile as sf
@@ -55,6 +56,8 @@ for folder in (OUTPUTS, REFS, CHUNKS, PREVIEWS):
 DB = DATA / "studio.sqlite3"
 
 MODELS = {
+    "ResembleAI/chatterbox": {"label": "Chatterbox Multilingual · Voice cloning", "family": "chatterbox", "size": "23 languages incl. Hindi · clone from reference audio · optional"},
+    "Firoj112/chatterbox-nepali-runs": {"label": "Chatterbox Nepali · Experimental cloning", "family": "nepali_clone", "size": "Community Nepali fine-tune · reference-audio cloning · experimental"},
     "hexgrad/Kokoro-82M": {"label": "Kokoro 82M · English / Hindi", "family": "kokoro", "size": "82M · fast English/Hindi · optional install · Apache 2.0"},
     "ai4bharat/indic-parler-tts": {"label": "Indic Parler · Hindi / Nepali", "family": "indic", "size": "Hindi & Nepali · voice descriptions · HF gated access · Apache 2.0"},
     "KittenML/kitten-tts-2": {"label": "KittenTTS 2", "family": "v2", "size": "1.7B · 47 voices · cloning + expression"},
@@ -64,7 +67,9 @@ MODELS = {
     "KittenML/kitten-tts-nano-0.8-int8": {"label": "Nano INT8", "family": "onnx", "size": "15M · smallest download"},
 }
 
-VOICE_PROFILES = {**{v: ("Kokoro natural voice", lang) for v, lang in KOKORO_VOICES.items()},
+VOICE_PROFILES = {
+    "Multilingual default": ("Chatterbox synthetic default voice", "Multilingual"),
+    "Nepali default": ("Chatterbox Nepali default voice", "Nepali"),**{v: ("Kokoro natural voice", lang) for v, lang in KOKORO_VOICES.items()},
     **{v: ("Indic Parler speaker", lang) for v, lang in INDIC_VOICES.items()},
     "Bella": ("Bright and friendly", "English"), "Jasper": ("Easygoing and warm", "English"),
     "Luna": ("Soft and clear", "English"), "Bruno": ("Confident narrator", "English"),
@@ -126,7 +131,7 @@ META_KEYS = {'model', 'device', 'weights', 'decoder', 'voice', 'preset',
              'normalize', 'streaming', 'speed', 'max_new_tokens',
              'use_reference_prompt', 'temperature', 'top_k', 'top_p', 'min_p',
              'advanced', 'reference_id', 'reference_text', 'loop_protection',
-             'segments', 'segment_gap', 'description'}
+             'segments', 'segment_gap', 'description', 'language'}
 
 
 def recording_meta(rid: str) -> dict:
@@ -194,6 +199,13 @@ def model_choice(payload: dict):
 
 
 def generation_options(payload: dict, family: str):
+    if family in ("chatterbox", "nepali_clone"):
+        language = str(payload.get("language") or ("ne" if family == "nepali_clone" else "en"))
+        if family == "nepali_clone" and language != "ne":
+            raise ValueError("The Nepali community fine-tune is offered for Nepali only.")
+        if family == "chatterbox" and language not in CLONE_LANGUAGES:
+            raise ValueError("Choose a language supported by Chatterbox Multilingual.")
+        return {"language": language}
     if family == "kokoro":
         return {}
     if family == "indic":
@@ -461,6 +473,30 @@ def synchronize_cuda(device: str | None):
         pass
 
 
+MODEL_HELP_LINKS = {
+    "ai4bharat/indic-parler-tts": "https://huggingface.co/ai4bharat/indic-parler-tts",
+    "Firoj112/chatterbox-nepali-runs": "https://huggingface.co/Firoj112/chatterbox-nepali-runs",
+}
+def explain_model_error(exc, model_id=None):
+    """Return safe, structured guidance without leaking tokens or exception URLs."""
+    detail = str(exc).lower()
+    if any(word in detail for word in ("gated repo", "gatedrepoerror", "not in the authorized list",
+                                       "access to model", "401 client error", "403 client error")):
+        url = MODEL_HELP_LINKS.get(model_id)  # Never turn arbitrary server output into links.
+        return {"code": "model_access", "title": "Model access required",
+                "message": ("Hugging Face denied access to this model. Open its page, sign in, "
+                            "request or accept access, and wait for approval if needed. "
+                            "Ensure HF_TOKEN is from the approved account, then retry."),
+                "url": url, "action": "Open model access page" if url else None}
+    if "libtorchaudio" in detail or ("torchaudio" in detail and "load" in detail):
+        return {"code": "audio_runtime", "title": "Audio runtime needs repair",
+                "message": "The model's TorchAudio library could not load. Run python studio.py --diagnose; for Indic run python studio.py --setup --repair-indic-audio."}
+    if "not installed" in detail or "no module named" in detail:
+        return {"code": "model_setup", "title": "Optional engine is not installed",
+                "message": str(exc)[:280]}
+    return None
+
+
 class StudioEngine:
     """Single serial worker: avoid simultaneous loads/generations on shared GPU."""
 
@@ -482,6 +518,7 @@ class StudioEngine:
                 "created": now(), "result_id": None, "result_ids": [], "chunks": [],
                 "completed": 0, "total": 0, "error": None, "warning": None, "device": None,
                 "timings": None, "preview_url": None, "preview_data": None,
+                "help": None,
             }
             self.futures[job_id] = self.executor.submit(self._run, job_id, task, payload)
         return job_id
@@ -529,7 +566,20 @@ class StudioEngine:
             elif "WinError 10054" in detail or "Server disconnected" in detail:
                 detail = ("The Hugging Face connection was reset. Your installed Python environment "
                           "is fine. Retry the model load, or try another network. " + detail[:500])
-            self.update(job_id, status="error", error=f"{type(exc).__name__}: {detail}", message="Generation failed" if task == "generate" else "Model load failed")
+            model_id = None
+            if task in ("load", "generate"):
+                model_id = payload.get("model", "KittenML/kitten-tts-2")
+            elif task == "preview":
+                try:
+                    model_id = record(payload["record_id"])["model"]
+                except Exception:
+                    pass
+            help_data = explain_model_error(exc, model_id)
+            # Do not put a huge Hugging Face traceback into the UI: structured help
+            # gives a clear instruction and a trusted link; server logs retain detail.
+            error = help_data["title"] + ": " + help_data["message"] if help_data else f"{type(exc).__name__}: {detail[:600]}"
+            self.update(job_id, status="error", error=error, help=help_data,
+                        message="Generation failed" if task == "generate" else "Model load failed")
 
     def snapshot(self, job_id):
         with self.lock:
@@ -573,8 +623,11 @@ class StudioEngine:
         if self.factory is None and family in ("v2", "onnx"):
             from kittenml import KittenTTS
             self.factory = KittenTTS
-        if family in ("kokoro", "indic"):
-            model = (KokoroEngine if family == "kokoro" else IndicParlerEngine)(device=device)
+        if family in ("kokoro", "indic", "chatterbox", "nepali_clone"):
+            engine_class = {"kokoro": KokoroEngine, "indic": IndicParlerEngine,
+                            "chatterbox": ChatterboxEngine, "nepali_clone": ChatterboxEngine}[family]
+            model = (engine_class(device=device, nepali=(family == "nepali_clone"))
+                     if family in ("chatterbox", "nepali_clone") else engine_class(device=device))
             self.model = model
             self.current_key = key
             return model
@@ -671,15 +724,18 @@ class StudioEngine:
             voice = str(segment.get("voice") or payload.get("voice") or "Bruno")
             kwargs = dict(opts)
             if voice == "__clone__":
-                if family != "v2":
-                    raise ValueError("Voice cloning is only available for KittenTTS 2")
+                if family not in ("v2", "chatterbox", "nepali_clone"):
+                    raise ValueError("Choose KittenTTS 2 or a Chatterbox cloning model to use a reference.")
                 rid = payload.get("reference_id")
                 if not isinstance(rid, str):
                     raise ValueError("Upload a reference recording before cloning")
-                kwargs["reference"] = self.reference_path(rid)
-                transcript = str(payload.get("reference_text") or "").strip()
-                if transcript:
-                    kwargs["reference_text"] = transcript
+                if family in ("chatterbox", "nepali_clone"):
+                    kwargs["reference"] = self.reference_path(rid)
+                else:
+                    kwargs["reference"] = self.reference_path(rid)
+                    transcript = str(payload.get("reference_text") or "").strip()
+                    if transcript:
+                        kwargs["reference_text"] = transcript
                 display_voice = "Cloned voice"
             else:
                 if voice not in list(getattr(model, "available_voices", [])):
@@ -848,7 +904,7 @@ class StudioEngine:
         model = self.load(key, job_id)
         if voice == '__clone__':
             kwargs = dict(reference=self.reference_path(selected['reference_id']))
-            if selected.get('reference_text'):
+            if family == 'v2' and selected.get('reference_text'):
                 kwargs['reference_text'] = selected['reference_text']
         else:
             kwargs = {'voice': voice}

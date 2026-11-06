@@ -1,4 +1,7 @@
 .venv/
+.venv-indic/
+.venv-clone/
+.venv-nepali/
 __pycache__/
 .pytest_cache/
 data/
